@@ -1,4 +1,5 @@
 mod capture;
+mod history;
 mod hotkeys;
 mod ocr;
 mod output;
@@ -12,7 +13,7 @@ use state::AppState;
 use std::sync::{atomic::Ordering, Mutex};
 use tauri::{
     ipc::{InvokeBody, Request},
-    AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
@@ -39,6 +40,33 @@ pub fn open_settings(app: &AppHandle) {
         .maximizable(false)
         .center()
         .build();
+}
+
+pub fn open_history(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("history") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let _ = WebviewWindowBuilder::new(app, "history", WebviewUrl::App("history.html".into()))
+        .title("Screenshot App — History")
+        .inner_size(960.0, 680.0)
+        .min_inner_size(520.0, 400.0)
+        .center()
+        .build();
+}
+
+/// Add a finished capture to history in the background (it runs OCR).
+fn remember(app: &AppHandle, rgba: Vec<u8>, width: u32, height: u32) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = history::add(&app, rgba, width, height) {
+            eprintln!("[history] save failed: {e}");
+            return;
+        }
+        let _ = app.emit_to("history", "history:changed", ());
+    });
 }
 
 /// Raw RGBA image sent from the overlay, with its size in headers.
@@ -170,8 +198,10 @@ async fn finish(app: AppHandle, request: Request<'_>) -> Result<Option<String>, 
     capture::close(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let result = output::finish(&app, &action, &rgba, w, h);
-        if let Err(e) = &result {
-            output::notify(&app, "Something went wrong", e);
+        match &result {
+            Err(e) => output::notify(&app, "Something went wrong", e),
+            Ok(None) if action == "saveas" => {} // Save-as cancelled: nothing was finished
+            Ok(_) => remember(&app, rgba, w, h),
         }
         result
     })
@@ -189,6 +219,7 @@ async fn pin(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Res
     };
     let (x, y) = (pos("x-left"), pos("x-top"));
     capture::close(&app);
+    remember(&app, rgba.clone(), width, height);
     pin::open(&app, &window, state::Frame { width, height, rgba }, x, y)
 }
 
@@ -200,6 +231,52 @@ fn pin_image(app: AppHandle, window: WebviewWindow) -> Result<tauri::ipc::Respon
 #[tauri::command]
 fn pin_copy(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     pin::copy(&app, window.label())
+}
+
+// ---------- history commands ----------
+
+#[derive(Serialize)]
+struct HistoryView {
+    /// Folder holding the PNGs, for the page's asset-protocol URLs.
+    dir: String,
+    entries: Vec<history::Entry>,
+}
+
+#[tauri::command]
+fn history_list(app: AppHandle) -> HistoryView {
+    HistoryView { dir: history::dir(&app).display().to_string(), entries: history::list(&app) }
+}
+
+#[tauri::command]
+fn history_star(app: AppHandle, id: String, starred: bool) -> Result<(), String> {
+    history::set_star(&app, &id, starred)
+}
+
+#[tauri::command]
+fn history_delete(app: AppHandle, id: String) -> Result<(), String> {
+    history::delete(&app, &id)
+}
+
+#[tauri::command]
+async fn history_copy(app: AppHandle, id: String) -> Result<(), String> {
+    let img = image::open(history::image_path(&app, &id)?).map_err(|e| e.to_string())?.to_rgba8();
+    output::copy_image(img.as_raw(), img.width(), img.height())
+}
+
+#[tauri::command]
+fn history_reveal(app: AppHandle, id: String) -> Result<(), String> {
+    let path = history::image_path(&app, &id)?;
+    // `/select,<path>` must be one argument for explorer to highlight the file.
+    std::process::Command::new("explorer")
+        .arg(format!("/select,{}", path.display()))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_history_window(app: AppHandle) {
+    open_history(&app);
 }
 
 // ---------- settings commands ----------
@@ -214,6 +291,7 @@ struct SettingsView {
     save_dir: String,
     save_dir_is_default: bool,
     autostart: bool,
+    history_days: u32,
 }
 
 fn settings_view(app: &AppHandle) -> SettingsView {
@@ -224,6 +302,7 @@ fn settings_view(app: &AppHandle) -> SettingsView {
         save_dir: settings::save_dir(app, &s).display().to_string(),
         save_dir_is_default: s.save_dir.is_empty(),
         autostart: app.autolaunch().is_enabled().unwrap_or(false),
+        history_days: s.history_days,
         hotkey_capture: s.hotkey_capture,
         hotkey_text: s.hotkey_text,
     }
@@ -295,6 +374,22 @@ fn open_save_dir(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Also applies to shots already in history (shortening deletes older ones, except starred).
+#[tauri::command]
+fn set_history_days(app: AppHandle, days: u32) -> Result<SettingsView, String> {
+    if days > 3650 {
+        return Err("Pick up to 10 years".into());
+    }
+    let state = app.state::<AppState>();
+    let mut s = state.settings.lock().unwrap().clone();
+    s.history_days = days;
+    settings::save(&app, &s)?;
+    *state.settings.lock().unwrap() = s;
+    history::prune(&app);
+    let _ = app.emit_to("history", "history:changed", ());
+    Ok(settings_view(&app))
+}
+
 #[tauri::command]
 fn set_autostart(app: AppHandle, enabled: bool) -> Result<SettingsView, String> {
     let al = app.autolaunch();
@@ -344,6 +439,9 @@ pub fn run() {
             tray::create(handle)?;
             hotkeys::register_all(handle);
             capture::warm_up(handle);
+            // Retention also runs on start, so shots expire even without new captures.
+            let h = handle.clone();
+            std::thread::spawn(move || history::prune(&h));
             // A tray app is invisible; show settings once so the user knows it's running.
             if first_run {
                 open_settings(handle);
@@ -363,6 +461,13 @@ pub fn run() {
             pin,
             pin_image,
             pin_copy,
+            history_list,
+            history_star,
+            history_delete,
+            history_copy,
+            history_reveal,
+            open_history_window,
+            set_history_days,
             get_settings,
             pause_hotkeys,
             set_hotkey,

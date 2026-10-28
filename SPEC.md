@@ -124,6 +124,14 @@ If a decision changes, update this file in the same commit.
 - **Stores the redacted version only.** Text under redacted areas is **never indexed**.
   - Why: a password you hid should never be findable by search or sit on disk.
 
+### Searchable history (built on experiment/v2)
+- **What's saved:** every finished capture (Copy, Save, Copy & save, Save as when not cancelled, Pin), in the background after the overlay closes. It is saved exactly as exported, so redactions and annotations are burned in and OCR runs on that image. Instant text grab is not saved, since it has no image.
+- **Storage:** app data dir `history/`, holding `<id>.png`, `<id>.thumb.png` (fits 480×320) and `index.json` (id, time, size, OCR text, starred). One JSON index, no database. The index is written to a temp file and renamed, so a crash can't wipe it. A 600×400 shot took ~60 ms to save, OCR included.
+- **History window** (tray → History…, or Settings → Open history): search box (every word must appear, any order and case, matched words shown in a snippet), a Starred filter, and a newest-first grid. Click a thumbnail or Copy to copy it. Show in folder. Star to keep forever. Delete takes two clicks ("Sure?"). `Ctrl+F` or `/` focuses search.
+- **Retention:** Settings → History, 1 / 7 / 30 / 90 / 365 days or Forever (default 30). It applies on change (asks first when shortening), after each save, and at startup.
+- **Safety:** ids from the page are checked before they become file names, so they can't escape the folder. Thumbnails load through Tauri's asset protocol, scoped to `$APPDATA/history/**` only.
+- Tested in the real app with a temporary hook: save + OCR + files + index, thumbnail loads in the real window, search hit/miss with snippet, star saved to disk, copy, two-click delete removes the files.
+
 ## 7. Roadmap
 
 ### v1: core loop (target ~1–2 weeks)

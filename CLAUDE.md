@@ -16,7 +16,7 @@ Deferred v1 items:
 - Push to GitHub: needs owner OK + co-author answer.
 - App name undecided. Shortlist (checked, no app found): Stillpane (top pick), Lensnip, Vitrashot, Glimpshot, Snaptic, Scrimshot. Taken: Veilshot, Hushshot, Cloakshot, Bokashi, Frisket (all screenshot-redaction tools), Snapture, Captureist, Pixsnip.
 
-v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built: Smart Redact, Live Text + Smart actions, annotations. They're only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser). Then merge to main (owner's call). v3 is underway on the same branch, in this order: pin to screen (done) -> zoom loupe + colour picker + window snap (done) -> searchable history -> AI re-read -> scrolling capture.
+v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built: Smart Redact, Live Text + Smart actions, annotations. They're only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser). Then merge to main (owner's call). v3 is underway on the same branch, in this order: pin to screen (done) -> zoom loupe + colour picker + window snap (done) -> searchable history (done) -> AI re-read -> scrolling capture.
 
 ## How things work (non-obvious)
 
@@ -29,6 +29,7 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 - JS unit tests: `npm test` (node's built-in runner, TS run natively; `*.test.ts` is excluded from tsc).
 - Browser mock: `ctrl+c` sent by the pane tool and `execCommand('copy')` don't fire a copy event; test the Live Text copy handler by dispatching a `ClipboardEvent('copy', { clipboardData: new DataTransfer() })`.
 - Real windows CAN be tested from PowerShell via Win32 (Add-Type): FindWindow by title (pass `[NullString]::Value`, not `$null`, for the class), call SetProcessDpiAwarenessContext(-4) first or rects come back scaled, then SendKeys / mouse_event for input. A temporary CLI hook in the single-instance handler can trigger a feature (remove before commit).
+- To test a page inside a real window: temporary hook calls `window.eval(js)`, and the JS reports back through a temporary `debug_log` command that prints to dev.log. Remove both before commit.
 - Window dragging (`startDragging`) swallows mouse-up, so the page never sees `dblclick`. Time the presses yourself.
 - Computer-use can't grant the dev build (not an installed app), so the real overlay can't be driven by Claude; ask the owner to hand-test.
 - PowerShell `Get-Content -Raw` reads BOM-less UTF-8 as ANSI and mangles `…`/`×`. Use the Edit tool or `[IO.File]` with UTF8Encoding($false).

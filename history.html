@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screenshot App — History</title>
+    <link rel="stylesheet" href="/src/history.css" />
+    <script type="module" src="/src/history.ts" defer></script>
+  </head>
+  <body>
+    <header>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
+        <input id="q" type="search" placeholder="Search text in your screenshots…" autocomplete="off" spellcheck="false" />
+      </div>
+      <label class="toggle"><input type="checkbox" id="only-starred" /> Starred</label>
+      <span id="count"></span>
+    </header>
+    <main id="grid"></main>
+    <p id="empty" hidden></p>
+    <div id="toast" role="status" hidden></div>
+  </body>
+</html>

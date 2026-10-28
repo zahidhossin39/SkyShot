@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Overlay and settings windows. App commands are always allowed; everything else goes through them.",
-  "windows": ["overlay-*", "settings"],
+  "windows": ["overlay-*", "settings", "history"],
   "permissions": ["core:default"]
 }

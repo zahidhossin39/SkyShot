@@ -9,6 +9,7 @@ type SettingsView = {
   saveDir: string;
   saveDirIsDefault: boolean;
   autostart: boolean;
+  historyDays: number;
 };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -44,6 +45,12 @@ function render(v: SettingsView) {
   $("save-dir").title = v.saveDir;
   $("reset-dir").hidden = v.saveDirIsDefault;
   $<HTMLInputElement>("autostart").checked = v.autostart;
+  const days = $<HTMLSelectElement>("history-days");
+  // A value set outside the presets (hand-edited settings.json) still shows up.
+  if (![...days.options].some((o) => o.value === String(v.historyDays))) {
+    days.add(new Option(`${v.historyDays} days`, String(v.historyDays)));
+  }
+  days.value = String(v.historyDays);
 }
 
 function setStatus(el: HTMLElement, active: boolean) {
@@ -158,5 +165,23 @@ $<HTMLInputElement>("autostart").addEventListener("change", async (e) => {
     showError(String(err));
   }
 });
+
+$<HTMLSelectElement>("history-days").addEventListener("change", async (e) => {
+  const select = e.target as HTMLSelectElement;
+  const days = Number(select.value);
+  const shorter = days !== 0 && (current.historyDays === 0 || days < current.historyDays);
+  // Shortening deletes older (unstarred) shots right away, so check first.
+  if (shorter && !confirm(`Delete unstarred screenshots older than ${select.selectedOptions[0].text}?`)) {
+    select.value = String(current.historyDays);
+    return;
+  }
+  try {
+    render(await invoke<SettingsView>("set_history_days", { days }));
+  } catch (err) {
+    select.value = String(current.historyDays);
+    showError(String(err));
+  }
+});
+$("open-history").addEventListener("click", () => invoke("open_history_window"));
 
 refresh();

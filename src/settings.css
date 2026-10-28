@@ -172,6 +172,15 @@ button.link:hover {
   font-size: 13px;
 }
 
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--key-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
 input[type="checkbox"] {
   width: 18px;
   height: 18px;
