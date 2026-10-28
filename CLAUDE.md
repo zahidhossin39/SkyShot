@@ -16,7 +16,7 @@ Deferred v1 items:
 - Push to GitHub: needs owner OK + co-author answer.
 - App name undecided. Shortlist (checked, no app found): Stillpane (top pick), Lensnip, Vitrashot, Glimpshot, Snaptic, Scrimshot. Taken: Veilshot, Hushshot, Cloakshot, Bokashi, Frisket (all screenshot-redaction tools), Snapture, Captureist, Pixsnip.
 
-Suggested v2 start: Smart Redact (reuses OCR word boxes), or annotations.
+v2 work happens on branch `experiment/v2` (owner's call). Order: Smart Redact (done, needs a hand test in the real overlay) -> Live Text + Smart actions -> annotations.
 
 ## How things work (non-obvious)
 
@@ -24,6 +24,9 @@ Suggested v2 start: Smart Redact (reuses OCR word boxes), or annotations.
 - All overlay geometry is physical pixels; `scale() = W / innerWidth`.
 - Redactions are an ops list burned into the canvas; undo replays from the original ImageData.
 - OCR (`ocr.rs`): native pass + parallel 2x pixel-doubled pass; 2x result used if median word height < 16 px. `ocr_samples` / `ocr_big_selection` tests need `OCR_SAMPLES` env (sample PNGs were in the session scratchpad; regenerate if needed).
+- `ocr_image` returns `{ text, lines }`: `lines` = word boxes per engine line, in the selection's pixels (2x pass already halved back). `ocr_boxes_match_native_pass` checks that and dumps `<sample>.json` for the JS detector.
+- JS unit tests: `npm test` (node's built-in runner, TS run natively; `*.test.ts` is excluded from tsc).
+- The browser pane throttles when hidden: screenshots can show stale frames. Trust `javascript_tool` state over screenshots there.
 - Overlay CSS has `[hidden] { display:none !important }` — without it `display:flex` elements ignore `hidden`.
 - Toolbar buttons carry `data-name/data-key/data-desc` for the hover tooltip.
 - Dev testing: `screenshot-app.exe --capture | --text | --close` drives the running instance. Logs: `[capture] ... visible N ms`, `[ocr] WxH: N ms`.

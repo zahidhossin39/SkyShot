@@ -29,6 +29,9 @@
         <button data-tool="box" data-name="Black box" data-key="R" data-desc="Drag to cover with solid black. Safest for passwords and keys.">
           <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" class="fill" /></svg>
         </button>
+        <button data-action="smart" data-name="Smart redact" data-key="S" data-desc="Find emails, phone and card numbers, IPs and API keys, then hide the ones you pick. Uses Black box unless Blur or Pixelate is on.">
+          <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" /><path d="M9 12h6" /></svg>
+        </button>
         <button data-action="undo" data-name="Undo" data-key="Ctrl+Z" data-desc="Remove the last blur, pixelate or box.">
           <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 010 10h-3" /></svg>
         </button>
@@ -52,6 +55,12 @@
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
+    </div>
+
+    <div id="smartbar" hidden>
+      <span id="smart-status"></span>
+      <button id="smart-cancel" class="label">Cancel</button>
+      <button id="smart-apply" class="label primary">Redact</button>
     </div>
 
     <div id="tip" role="tooltip" hidden>

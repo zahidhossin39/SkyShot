@@ -6,6 +6,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { findSensitive, type Word } from "./sensitive";
 
 type Mode = "capture" | "text";
 type Tool = "select" | "blur" | "pixelate" | "box";
@@ -14,7 +15,10 @@ type Rect = { x: number; y: number; w: number; h: number };
 type Point = { x: number; y: number };
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type OpenPayload = { mode: Mode; width: number; height: number };
-type Op = { tool: RedactTool; rect: Rect };
+type Op = { tool: RedactTool; rects: Rect[] };
+type Pick = { rect: Rect; on: boolean };
+/** Smart Redact in progress: every OCR word (click to add) and the suggested boxes. */
+type Smart = { words: Rect[]; picks: Pick[]; loading: boolean; error?: string };
 type Drag =
   | { kind: "new"; origin: Point }
   | { kind: "move"; origin: Point; start: Rect }
@@ -35,6 +39,9 @@ const toolbar = $("toolbar");
 const panel = $("textpanel");
 const textOut = $<HTMLTextAreaElement>("text-out");
 const textStatus = $("text-status");
+const smartbar = $("smartbar");
+const smartStatus = $("smart-status");
+const smartApply = $<HTMLButtonElement>("smart-apply");
 const tmp = document.createElement("canvas");
 const tctx = tmp.getContext("2d")!;
 
@@ -49,6 +56,7 @@ let tool: Tool = "select";
 let ops: Op[] = [];
 let drag: Drag | null = null;
 let pendingOp: Rect | null = null;
+let smart: Smart | null = null;
 
 /** Physical pixels per CSS pixel. */
 const scale = () => (W ? W / window.innerWidth : window.devicePixelRatio);
@@ -105,8 +113,10 @@ const CURSORS: Record<Handle, string> = {
 
 // ---------------------------------------------------------------- redaction
 
-/** Burn one redaction into the view canvas. Pixels underneath are destroyed. */
-function applyOp({ tool, rect: { x, y, w, h } }: Op) {
+/** Burn a redaction into the view canvas. Pixels underneath are destroyed. */
+const applyOp = (op: Op) => op.rects.forEach((r) => applyRect(op.tool, r));
+
+function applyRect(tool: RedactTool, { x, y, w, h }: Rect) {
   if (tool === "box") {
     vctx.fillStyle = "#000";
     vctx.fillRect(x, y, w, h);
@@ -176,7 +186,7 @@ function renderUI() {
   uctx.lineWidth = Math.max(1, Math.round(s));
   uctx.strokeRect(sel.x + 0.5, sel.y + 0.5, sel.w - 1, sel.h - 1);
 
-  if (mode === "capture" && drag?.kind !== "new") {
+  if (mode === "capture" && drag?.kind !== "new" && !smart) {
     const hs = Math.round(6 * s);
     const cx = [sel.x, sel.x + sel.w / 2, sel.x + sel.w];
     const cy = [sel.y, sel.y + sel.h / 2, sel.y + sel.h];
@@ -198,6 +208,18 @@ function renderUI() {
     uctx.strokeRect(pendingOp.x + 0.5, pendingOp.y + 0.5, pendingOp.w - 1, pendingOp.h - 1);
     uctx.setLineDash([]);
   }
+
+  // Smart Redact suggestions: red = will be hidden, faint = kept visible.
+  if (smart) {
+    uctx.setLineDash([4 * s, 3 * s]);
+    for (const { rect: r, on } of smart.picks) {
+      uctx.fillStyle = on ? "rgba(239, 68, 68, 0.28)" : "rgba(255, 255, 255, 0.06)";
+      uctx.fillRect(r.x, r.y, r.w, r.h);
+      uctx.strokeStyle = on ? "#f87171" : "rgba(255, 255, 255, 0.6)";
+      uctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    }
+    uctx.setLineDash([]);
+  }
 }
 
 /** Position the DOM bits (hint, size label, toolbar) around the selection. */
@@ -206,8 +228,10 @@ function updateChrome() {
   const has = !!sel && sel.w >= MIN_SIZE && sel.h >= MIN_SIZE;
 
   setHint(
-    !sel
-      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+    smart
+      ? `Click a box to keep it visible${SEP}Click any word to hide it${SEP}<kbd>Enter</kbd> redact${SEP}<kbd>Esc</kbd> back`
+      : !sel
+      ?`${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
       : has && mode === "capture" && tool !== "select"
         ? `${TOOL_HINTS[tool]}${SEP}<kbd>Ctrl+Z</kbd> undo${SEP}<kbd>V</kbd> done`
         : null,
@@ -221,7 +245,20 @@ function updateChrome() {
     sizeLabel.style.top = `${top < 4 ? sel.y / s + 4 : top}px`;
   }
 
-  const showBar = has && mode === "capture" && !drag;
+  smartbar.hidden = !smart;
+  if (smart && sel) {
+    const on = smart.picks.filter((k) => k.on).length;
+    smartbar.classList.toggle("loading", smart.loading);
+    smartStatus.textContent = smart.loading
+      ? "Looking for sensitive text…"
+      : smart.error ??
+        (smart.picks.length ? `${on} of ${smart.picks.length} selected` : "Nothing found. Click words to hide them.");
+    smartApply.textContent = on ? `Redact ${on}` : "Redact";
+    smartApply.disabled = smart.loading || on === 0;
+    placeNear(smartbar, sel);
+  }
+
+  const showBar = has && mode === "capture" && !drag && !smart;
   toolbar.hidden = !showBar;
   if (!showBar) hideTip();
   if (showBar && sel) {
@@ -339,6 +376,7 @@ async function open(p: OpenPayload) {
     vctx.putImageData(original, 0, 0);
     sel = null;
     ops = [];
+    smart = null;
     tool = "select";
     renderUI();
     updateChrome();
@@ -358,7 +396,8 @@ function reset() {
   ops = [];
   drag = null;
   pendingOp = null;
-  toolbar.hidden = panel.hidden = sizeLabel.hidden = true;
+  smart = null;
+  toolbar.hidden = smartbar.hidden = panel.hidden = sizeLabel.hidden = true;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
@@ -411,7 +450,7 @@ async function extractText() {
   placePanel();
   const { bytes, headers } = cropSelection();
   try {
-    const text = await invoke<string>("ocr_image", bytes, { headers });
+    const { text } = await invoke<{ text: string }>("ocr_image", bytes, { headers });
     textOut.value = text;
     const words = text.split(/\s+/).filter(Boolean).length;
     textStatus.textContent = text.trim() ? `${words} words found — fix anything, then copy` : "No text found in this area";
@@ -432,6 +471,78 @@ async function copyText() {
   }
 }
 
+// ---------------------------------------------------------------- smart redact
+
+/** OCR box (relative to the selection) -> padded screen rect inside the selection. */
+function boxToRect(b: Rect, r: Rect): Rect {
+  const p = 3 * scale();
+  const x = Math.floor(r.x + b.x - p);
+  const y = Math.floor(r.y + b.y - p);
+  return clampTo({ x, y, w: Math.ceil(r.x + b.x + b.w + p) - x, h: Math.ceil(r.y + b.y + b.h + p) - y }, r);
+}
+
+function union(ws: Rect[]): Rect {
+  const x = Math.min(...ws.map((w) => w.x));
+  const y = Math.min(...ws.map((w) => w.y));
+  return { x, y, w: Math.max(...ws.map((w) => w.x + w.w)) - x, h: Math.max(...ws.map((w) => w.y + w.h)) - y };
+}
+
+async function startSmart() {
+  if (!sel || busy || smart) return;
+  const r = sel;
+  const s: Smart = { words: [], picks: [], loading: true };
+  smart = s;
+  panel.hidden = true;
+  updateChrome();
+  renderUI();
+  const { bytes, headers } = cropSelection();
+  try {
+    const { lines } = await invoke<{ lines: Word[][] }>("ocr_image", bytes, { headers });
+    s.words = lines.flat().map((w) => boxToRect(w, r));
+    s.picks = findSensitive(lines).map((f) => ({ rect: boxToRect(union(f.words), r), on: true }));
+  } catch (e) {
+    s.error = String(e);
+  }
+  s.loading = false;
+  if (smart !== s) return; // cancelled, or the overlay closed meanwhile
+  updateChrome();
+  renderUI();
+}
+
+/** Click a suggestion to toggle it; click any other word to add it. */
+function smartClick(p: Point) {
+  const s = smart!;
+  const pick = s.picks.find((k) => inside(p, k.rect));
+  if (pick) pick.on = !pick.on;
+  else {
+    const word = s.words.find((w) => inside(p, w));
+    if (word) s.picks.push({ rect: word, on: true });
+  }
+}
+
+const overWord = (p: Point) => !!smart && [...smart.picks.map((k) => k.rect), ...smart.words].some((r) => inside(p, r));
+
+/** One op for the whole batch, so a single undo brings it all back. */
+function applySmart() {
+  if (!smart || smart.loading) return;
+  const rects = smart.picks.filter((k) => k.on).map((k) => k.rect);
+  smart = null;
+  if (rects.length) {
+    // Black box unless the user picked blur/pixelate first: safest for keys and passwords.
+    const op: Op = { tool: tool === "select" ? "box" : tool, rects };
+    ops.push(op);
+    applyOp(op);
+  }
+  updateChrome();
+  renderUI();
+}
+
+function cancelSmart() {
+  smart = null;
+  updateChrome();
+  renderUI();
+}
+
 // ---------------------------------------------------------------- input
 
 function setTool(t: Tool) {
@@ -442,6 +553,12 @@ function setTool(t: Tool) {
 ui.addEventListener("mousedown", (e) => {
   if (e.button !== 0 || busy) return;
   const p = toPhys(e);
+  if (smart) {
+    smartClick(p);
+    updateChrome();
+    renderUI();
+    return;
+  }
   const editable = mode === "capture" && sel;
   if (editable && tool !== "select" && inside(p, sel!)) {
     drag = { kind: "op", origin: p };
@@ -463,7 +580,9 @@ window.addEventListener("mousemove", (e) => {
   const p = toPhys(e);
   if (!drag) {
     let cursor = "crosshair";
-    if (mode === "capture" && sel && tool === "select") {
+    if (smart) {
+      cursor = overWord(p) ? "pointer" : "default";
+    } else if (mode === "capture" && sel && tool === "select") {
       const h = handleAt(p, sel);
       cursor = h ? CURSORS[h] : inside(p, sel) ? "move" : "crosshair";
     }
@@ -511,7 +630,7 @@ window.addEventListener("mouseup", () => {
   }
   if (d.kind === "op" && pendingOp && tool !== "select") {
     if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) {
-      const op: Op = { tool, rect: pendingOp };
+      const op: Op = { tool, rects: [pendingOp] };
       ops.push(op);
       applyOp(op);
     }
@@ -535,6 +654,11 @@ window.addEventListener("keydown", (e) => {
     }
     return; // let the textarea handle typing, Ctrl+C, etc.
   }
+  if (smart) {
+    if (e.key === "Escape") cancelSmart();
+    if (e.key === "Enter") applySmart();
+    return void e.preventDefault();
+  }
   if (e.key === "Escape") return void close();
   if (mode !== "capture" || !sel || sel.w < MIN_SIZE) return;
 
@@ -548,6 +672,7 @@ window.addEventListener("keydown", (e) => {
     const tools: Record<string, Tool> = { v: "select", b: "blur", p: "pixelate", r: "box" };
     if (tools[k]) return setTool(tools[k]), true;
     if (k === "t") return extractText(), true;
+    if (k === "s") return startSmart(), true;
     return false;
   })();
   if (handled) e.preventDefault();
@@ -560,6 +685,7 @@ toolbar.addEventListener("click", (e) => {
   switch (btn.dataset.action) {
     case "undo": return undo();
     case "ocr": return void extractText();
+    case "smart": return void startSmart();
     case "copy":
     case "save":
     case "both":
@@ -583,6 +709,9 @@ toolbar.addEventListener("mousedown", (e) => {
   hideTip();
 });
 panel.addEventListener("mousedown", (e) => e.stopPropagation());
+smartbar.addEventListener("mousedown", (e) => e.stopPropagation());
+$("smart-cancel").addEventListener("click", cancelSmart);
+smartApply.addEventListener("click", applySmart);
 
 $("text-close").addEventListener("click", () => (panel.hidden = true));
 $("text-copy").addEventListener("click", copyText);

@@ -85,7 +85,8 @@ canvas {
 
 /* ---------------------------------------------------------------- toolbar */
 
-#toolbar {
+#toolbar,
+#smartbar {
   position: fixed;
   display: flex;
   align-items: center;
@@ -95,6 +96,25 @@ canvas {
   background: var(--bar-bg);
   box-shadow: var(--shadow);
   animation: rise 160ms var(--ease-out);
+}
+
+#smart-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 6px;
+  color: var(--bar-muted);
+  white-space: nowrap;
+}
+
+#smartbar.loading #smart-status::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bar-line);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
 }
 
 #toolbar .group {
@@ -307,6 +327,7 @@ button svg .faint {
 
 @media (prefers-reduced-motion: reduce) {
   #toolbar,
+  #smartbar,
   #tip,
   #textpanel {
     animation: none;

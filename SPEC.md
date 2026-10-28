@@ -62,6 +62,8 @@ If a decision changes, update this file in the same commit.
 - One click "Redact all", or untick individual ones.
 - **Click any word** to redact just that word.
 - Not fully automatic. Why: auto-hiding can remove things you meant to show, and you may not notice.
+- **Built (experiment/v2 branch):** toolbar shield button or `S`. Red dashed boxes = will be hidden; click a box to keep it, click any other word to add it; `Enter` redact, `Esc` back. Uses Black box unless Blur/Pixelate is the active tool. The whole batch is one undo step.
+- Detection is regex on each OCR line (`src/sensitive.ts`, tests in `sensitive.test.ts`, run `npm test`): email, IPv4 (port included), card (Luhn check), phone (9–15 digits, 8 if it starts with `+`), key/token (any 20+ char letters+digits token, plus an `sk-`/`ghp_`-style prefix word because OCR splits it). Known false positive: a plain 10-digit number reads as a phone. Accepted since every box is reviewed.
 
 ## 5. Feature: Text extraction (OCR)
 

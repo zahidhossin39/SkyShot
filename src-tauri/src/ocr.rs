@@ -1,8 +1,22 @@
-﻿//! Offline OCR using the engine built into Windows 10/11 (Windows.Media.Ocr).
+//! Offline OCR using the engine built into Windows 10/11 (Windows.Media.Ocr).
 
-/// Recognize text in an RGBA image. Returns lines joined with '\n'.
+/// OCR result: the text in reading order, plus each engine line's word boxes
+/// (in the input image's pixels) for Smart Redact.
+#[derive(serde::Serialize)]
+pub struct Ocr {
+    pub text: String,
+    pub lines: Vec<Vec<Word>>,
+}
+
+impl Ocr {
+    fn new(lines: Vec<Vec<Word>>) -> Self {
+        Ocr { text: layout(lines.clone()), lines }
+    }
+}
+
+/// Recognize text in an RGBA image.
 #[cfg(windows)]
-pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<String, String> {
+pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
     init();
     let t = std::time::Instant::now();
     let max_dim = windows::Media::Ocr::OcrEngine::MaxImageDimension().map_err(|e| e.message().to_string())?;
@@ -22,11 +36,15 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<String, String>
     if median_height(&lines) < SMALL_TEXT_PX {
         if let Ok(big) = rx.recv() {
             println!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
-            return Ok(layout(big?));
+            let mut big = big?;
+            for w in big.iter_mut().flatten() {
+                (w.x, w.y, w.w, w.h) = (w.x / 2.0, w.y / 2.0, w.w / 2.0, w.h / 2.0);
+            }
+            return Ok(Ocr::new(big));
         }
     }
     println!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
-    Ok(layout(lines))
+    Ok(Ocr::new(lines))
 }
 
 /// WinRT needs each calling thread initialized; harmless if it already is.
@@ -116,7 +134,7 @@ fn median_height(lines: &[Vec<Word>]) -> f32 {
 }
 
 #[cfg(not(windows))]
-pub fn recognize(_rgba: &[u8], _width: u32, _height: u32) -> Result<String, String> {
+pub fn recognize(_rgba: &[u8], _width: u32, _height: u32) -> Result<Ocr, String> {
     Err("OCR is only implemented on Windows so far.".into())
 }
 
@@ -125,8 +143,8 @@ fn can_upscale(width: u32, height: u32, max_dim: u32) -> bool {
     width * 2 <= max_dim && height * 2 <= max_dim && (width as u64 * height as u64) <= 2_500_000
 }
 
-#[derive(Clone)]
-struct Word {
+#[derive(Clone, serde::Serialize)]
+pub struct Word {
     x: f32,
     y: f32,
     w: f32,
@@ -199,7 +217,7 @@ mod tests {
             if path.extension().is_some_and(|e| e == "png") {
                 let img = image::open(&path).unwrap().to_rgba8();
                 let t = std::time::Instant::now();
-                let text = recognize(img.as_raw(), img.width(), img.height()).unwrap();
+                let text = recognize(img.as_raw(), img.width(), img.height()).unwrap().text;
                 println!(
                     "{:<10} {:>4}ms  {}",
                     path.file_stem().unwrap().to_string_lossy(),
@@ -230,8 +248,32 @@ mod tests {
             }
         }
         let t = std::time::Instant::now();
-        let text = recognize(big.as_raw(), 1200, 800).unwrap();
+        let text = recognize(big.as_raw(), 1200, 800).unwrap().text;
         println!("big {} ms, {} lines", t.elapsed().as_millis(), text.lines().count());
+    }
+
+    /// Boxes from the 2x pass are halved back; they must land where the native pass put
+    /// the same word. Also writes <name>.json next to each sample for the JS detector.
+    #[test]
+    fn ocr_boxes_match_native_pass() {
+        let Ok(dir) = std::env::var("OCR_SAMPLES") else { return };
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if !path.extension().is_some_and(|e| e == "png") { continue; }
+            let img = image::open(&path).unwrap().to_rgba8();
+            let (w, h) = img.dimensions();
+            let native: Vec<Word> = read_words(img.as_raw(), w, h).unwrap().into_iter().flatten().collect();
+            let ocr = recognize(img.as_raw(), w, h).unwrap();
+            let mut matched = 0;
+            for word in ocr.lines.iter().flatten() {
+                if let Some(n) = native.iter().find(|n| n.text == word.text) {
+                    assert!((n.x - word.x).abs() < 4.0 && (n.y - word.y).abs() < 4.0, "{:?}: '{}' moved", path, word.text);
+                    matched += 1;
+                }
+            }
+            assert!(matched > 0 || native.is_empty(), "{path:?}: no words in common");
+            std::fs::write(path.with_extension("json"), serde_json::to_string(&ocr).unwrap()).unwrap();
+        }
     }
 
     #[test]

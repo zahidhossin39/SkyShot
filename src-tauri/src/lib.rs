@@ -91,7 +91,7 @@ fn overlay_close(app: AppHandle) {
 }
 
 #[tauri::command]
-async fn ocr_image(request: Request<'_>) -> Result<String, String> {
+async fn ocr_image(request: Request<'_>) -> Result<ocr::Ocr, String> {
     let (rgba, w, h) = raw_image(&request)?;
     tauri::async_runtime::spawn_blocking(move || ocr::recognize(&rgba, w, h))
         .await
@@ -109,7 +109,7 @@ async fn grab_text(app: AppHandle, request: Request<'_>) -> Result<(), String> {
     let (rgba, w, h) = raw_image(&request)?;
     capture::close(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        match ocr::recognize(&rgba, w, h) {
+        match ocr::recognize(&rgba, w, h).map(|o| o.text) {
             Ok(text) if !text.trim().is_empty() => {
                 output::copy_text(&text)?;
                 let preview: String = text.chars().take(80).collect();
