@@ -21,7 +21,7 @@ type Pick = { rect: Rect; on: boolean };
 /** Smart Redact in progress: every OCR word (click to add) and the suggested boxes. */
 type Smart = { words: Rect[]; picks: Pick[]; loading: boolean; error?: string };
 type Drag =
-  | { kind: "new"; origin: Point }
+  | { kind: "new"; origin: Point; snap: Rect | null } // snap: window to select if it's just a click
   | { kind: "move"; origin: Point; start: Rect }
   | { kind: "resize"; origin: Point; start: Rect; handle: Handle }
   | { kind: "op"; origin: Point }
@@ -48,6 +48,9 @@ const smartbar = $("smartbar");
 const smartStatus = $("smart-status");
 const smartApply = $<HTMLButtonElement>("smart-apply");
 const noteInput = $<HTMLTextAreaElement>("note-input");
+const loupe = $("loupe");
+const loupeCanvas = $<HTMLCanvasElement>("loupe-canvas");
+const lctx = loupeCanvas.getContext("2d")!;
 const tmp = document.createElement("canvas");
 const tctx = tmp.getContext("2d")!;
 /** Screenshot + redactions, without annotations, so notes can be redrawn on every mouse move. */
@@ -75,6 +78,11 @@ let color = COLORS[0];
 let editing: { at: Point; idx: number } | null = null;
 /** Undo snapshots. Covers redactions and every annotation change (add, move, edit, delete). */
 let history: { ops: Op[]; notes: Note[] }[] = [];
+/** Visible windows on this monitor, top-most first (from Rust, shortly after open). */
+let windows: Rect[] = [];
+let hoverWin: Rect | null = null;
+let lastPoint: Point | null = null;
+let hex = "";
 
 /** Physical pixels per CSS pixel. */
 const scale = () => (W ? W / window.innerWidth : window.devicePixelRatio);
@@ -226,9 +234,17 @@ function renderUI() {
   uctx.clearRect(0, 0, W, H);
   uctx.fillStyle = "rgba(0, 0, 0, 0.45)";
   uctx.fillRect(0, 0, W, H);
+  const s = scale();
+  // Snap preview: the window under the cursor, selectable with one click.
+  if (!sel && hoverWin) {
+    const r = hoverWin;
+    uctx.clearRect(r.x, r.y, r.w, r.h);
+    uctx.strokeStyle = ACCENT;
+    uctx.lineWidth = Math.max(2, Math.round(2 * s));
+    uctx.strokeRect(r.x + uctx.lineWidth / 2, r.y + uctx.lineWidth / 2, r.w - uctx.lineWidth, r.h - uctx.lineWidth);
+  }
   if (!sel || sel.w === 0 || sel.h === 0) return;
 
-  const s = scale();
   uctx.clearRect(sel.x, sel.y, sel.w, sel.h);
   uctx.strokeStyle = ACCENT;
   uctx.lineWidth = Math.max(1, Math.round(s));
@@ -290,7 +306,7 @@ function updateChrome() {
       : live
       ? `Drag over the image to select text${SEP}<kbd>Ctrl+C</kbd> copy${SEP}<kbd>Esc</kbd> close`
       : !sel
-      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}Click a window to grab it${SEP}<kbd>C</kbd> copy colour${SEP}<kbd>Esc</kbd> cancel`
       : editing
       ? `Type your text${SEP}<kbd>Enter</kbd> done${SEP}<kbd>Shift+Enter</kbd> new line${SEP}<kbd>Esc</kbd> discard`
       : notes[picked] && tool === "select"
@@ -474,8 +490,10 @@ function reset() {
   history = [];
   picked = -1;
   editing = null;
+  windows = [];
+  hoverWin = null;
   closeText();
-  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = noteInput.hidden = true;
+  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = noteInput.hidden = loupe.hidden = true;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
@@ -769,6 +787,61 @@ function deletePicked() {
   renderUI();
 }
 
+// ---------------------------------------------------------------- loupe
+
+const CELLS = 15; // odd, so one pixel sits in the middle
+
+/** Magnifier + colour readout by the cursor while choosing an area or dragging an edge. */
+function updateLoupe(p: Point | null) {
+  lastPoint = p;
+  const show = !!p && !!original && !smart && (!sel || drag?.kind === "new" || drag?.kind === "resize");
+  loupe.hidden = !show;
+  if (!show || !p || !original) return;
+  const s = scale();
+  const size = Math.round(120 * s);
+  if (loupeCanvas.width !== size) loupeCanvas.width = loupeCanvas.height = size;
+  const half = (CELLS - 1) / 2;
+  const cell = size / CELLS;
+  lctx.imageSmoothingEnabled = false;
+  lctx.fillStyle = "#000"; // beyond the screen edge
+  lctx.fillRect(0, 0, size, size);
+  lctx.drawImage(view, p.x - half, p.y - half, CELLS, CELLS, 0, 0, size, size);
+  // The picked pixel: dark + light outline so it shows on any colour.
+  lctx.lineWidth = Math.max(1, s);
+  lctx.strokeStyle = "#000";
+  lctx.strokeRect(half * cell, half * cell, cell, cell);
+  lctx.strokeStyle = "#fff";
+  lctx.strokeRect(half * cell - lctx.lineWidth, half * cell - lctx.lineWidth, cell + 2 * lctx.lineWidth, cell + 2 * lctx.lineWidth);
+
+  // Colour from the original screenshot: what's really on screen, not our marks.
+  const x = Math.min(W - 1, p.x);
+  const y = Math.min(H - 1, p.y);
+  const i = (y * W + x) * 4;
+  const d = original.data;
+  hex = "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+  $("loupe-hex").textContent = hex;
+  $("loupe-pos").textContent = `${x}, ${y}`;
+
+  // Bottom-right of the cursor; flip to the other side near screen edges.
+  const cx = p.x / s;
+  const cy = p.y / s;
+  const bw = loupe.offsetWidth;
+  const bh = loupe.offsetHeight;
+  loupe.style.left = `${cx + 20 + bw > window.innerWidth ? cx - 20 - bw : cx + 20}px`;
+  loupe.style.top = `${cy + 20 + bh > window.innerHeight ? cy - 20 - bh : cy + 20}px`;
+}
+
+async function copyHex() {
+  const shown = hex;
+  try {
+    await invoke("copy_text", { text: shown });
+    $("loupe-hex").textContent = "Copied ✓";
+    setTimeout(() => lastPoint && updateLoupe(lastPoint), 800);
+  } catch (e) {
+    console.error("[overlay] copy colour failed", e);
+  }
+}
+
 // ---------------------------------------------------------------- input
 
 function setTool(t: Tool) {
@@ -816,7 +889,8 @@ ui.addEventListener("mousedown", (e) => {
     drag = { kind: "move", origin: p, start: { ...sel! } };
   } else {
     picked = -1;
-    drag = { kind: "new", origin: p };
+    drag = { kind: "new", origin: p, snap: sel ? null : hoverWin };
+    hoverWin = null;
     sel = { x: p.x, y: p.y, w: 0, h: 0 };
     closeText();
   }
@@ -833,6 +907,14 @@ ui.addEventListener("dblclick", (e) => {
 
 window.addEventListener("mousemove", (e) => {
   const p = toPhys(e);
+  updateLoupe(p);
+  if (!drag && !sel && original) {
+    const w = windows.find((r) => inside(p, r)) ?? null;
+    if (w !== hoverWin) {
+      hoverWin = w;
+      renderUI();
+    }
+  }
   if (!drag) {
     let cursor = "crosshair";
     if (smart) {
@@ -886,14 +968,16 @@ window.addEventListener("mouseup", () => {
   const d = drag;
   drag = null;
   if (d.kind === "new") {
-    if (!sel || sel.w < MIN_SIZE || sel.h < MIN_SIZE) {
-      sel = null;
-    } else if (mode === "text") {
+    // A click (no real drag) on a window selects that window.
+    if (!sel || sel.w < MIN_SIZE || sel.h < MIN_SIZE) sel = d.snap ? { ...d.snap } : null;
+    if (sel && mode === "text") {
+      loupe.hidden = true;
       renderUI();
       grabText();
       return;
     }
   }
+  updateLoupe(lastPoint);
   if (d.kind === "op" && pendingOp && isRedact(tool)) {
     if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) addRedaction({ tool, rects: [pendingOp] });
     pendingOp = null;
@@ -933,6 +1017,10 @@ window.addEventListener("keydown", (e) => {
     return void e.preventDefault();
   }
   if (e.key === "Escape") return void close();
+  if (!loupe.hidden && e.key.toLowerCase() === "c" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    copyHex();
+    return void e.preventDefault();
+  }
   if (mode !== "capture" || !sel || sel.w < MIN_SIZE) return;
 
   const k = e.key.toLowerCase();
@@ -1008,5 +1096,9 @@ $("text-copy").addEventListener("click", () => copyValue(textOut.value));
 const win = getCurrentWebviewWindow();
 win.listen<OpenPayload>("overlay:open", (e) => open(e.payload));
 win.listen("overlay:reset", reset);
+win.listen<[number, number, number, number][]>("overlay:windows", (e) => {
+  windows = e.payload.map(([x, y, w, h]) => ({ x, y, w, h }));
+});
+document.addEventListener("mouseleave", () => updateLoupe(null));
 // In case the open event fired before this page finished loading.
 invoke<OpenPayload | null>("overlay_pending").then((p) => p && open(p));

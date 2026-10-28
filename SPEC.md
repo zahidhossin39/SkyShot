@@ -111,6 +111,12 @@ If a decision changes, update this file in the same commit.
 - Rust keeps each pin's pixels (`pin.rs`, dropped when its window closes) and gives the page a PNG. Pin windows get their own capability (`capabilities/pin.json`: drag, resize, show, focus, close) instead of widening the overlay's.
 - Tested on the real window via Win32: position, 400×300 client size, zoom, reset, drag, Esc, double-click, Ctrl+C.
 
+### Zoom loupe, colour picker, window snap (built on experiment/v2)
+- Loupe: while choosing an area (before selecting, while dragging a new one, or while resizing an edge), a 120 px magnifier follows the cursor. It shows 15×15 pixels at 8×, the centre pixel outlined, its hex and its x,y. It flips sides near screen edges.
+- `C` (while the loupe shows) copies the hex, e.g. `#1E40AF`. The colour comes from the original screenshot, not from our marks.
+- Window snap: before selecting, the window under the cursor is outlined; a click (no drag) selects exactly that window. Rust lists windows after the frames are sent (xcap, z-order, own windows and windows under 40 px dropped, clipped per monitor). That took ~3 ms in testing, off the hotkey path (hotkey to visible unchanged at ~170 ms). Rects matched DPI-aware Win32 rects exactly.
+- Not done: snapping to UI elements inside a window (buttons, panels). That needs UI Automation, so it's a later maybe.
+
 ### History rules (v3)
 - **Retention is user-configurable in settings**: number of days (e.g. 1–365) or "forever". Default 30.
   - Changing the value applies to existing shots too (shorten → older ones get deleted).
