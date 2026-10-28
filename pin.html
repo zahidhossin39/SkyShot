@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pinned screenshot</title>
+    <link rel="stylesheet" href="/src/pin.css" />
+    <script type="module" src="/src/pin.ts" defer></script>
+  </head>
+  <body>
+    <img id="img" alt="Pinned screenshot" draggable="false" />
+    <button id="close" title="Close (Esc)" aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+    </button>
+    <div id="toast" hidden></div>
+  </body>
+</html>

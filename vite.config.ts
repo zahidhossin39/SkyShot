@@ -10,12 +10,13 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // Two pages: the capture overlay (one window per monitor) and settings.
+  // Pages: the capture overlay (one window per monitor), settings, and pinned shots.
   build: {
     rollupOptions: {
       input: {
         overlay: "overlay.html",
         settings: "settings.html",
+        pin: "pin.html",
       },
     },
   },

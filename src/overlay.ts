@@ -507,6 +507,19 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   }
 }
 
+async function pin() {
+  if (!sel || busy) return;
+  commitNoteInput();
+  busy = true;
+  const { bytes, headers } = cropSelection();
+  try {
+    await invoke("pin", bytes, { headers: { ...headers, "x-left": String(sel.x), "x-top": String(sel.y) } });
+  } catch (e) {
+    console.error("[overlay] pin failed", e);
+    busy = false;
+  }
+}
+
 async function grabText() {
   if (!sel || busy) return;
   busy = true;
@@ -932,6 +945,7 @@ window.addEventListener("keydown", (e) => {
     if (k === "enter") return finish("both"), true;
     if ((k === "delete" || k === "backspace") && notes[picked]) return deletePicked(), true;
     if (k === "c") return cycleColor(), true;
+    if (k === "f") return pin(), true;
     const tools: Record<string, Tool> = {
       v: "select", b: "blur", p: "pixelate", r: "box",
       a: "arrow", o: "rect", h: "mark", w: "text", n: "step",
@@ -953,6 +967,7 @@ toolbar.addEventListener("click", (e) => {
     case "ocr": return void extractText();
     case "smart": return void startSmart();
     case "color": return cycleColor();
+    case "pin": return void pin();
     case "copy":
     case "save":
     case "both":

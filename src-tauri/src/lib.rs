@@ -2,6 +2,7 @@ mod capture;
 mod hotkeys;
 mod ocr;
 mod output;
+mod pin;
 mod settings;
 mod state;
 mod tray;
@@ -178,6 +179,29 @@ async fn finish(app: AppHandle, request: Request<'_>) -> Result<Option<String>, 
     .map_err(|e| e.to_string())?
 }
 
+/// Pin the selection to the screen. Async: creating a window from a sync command can
+/// deadlock on Windows.
+#[tauri::command]
+async fn pin(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Result<(), String> {
+    let (rgba, width, height) = raw_image(&request)?;
+    let pos = |name: &str| -> i32 {
+        request.headers().get(name).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(0)
+    };
+    let (x, y) = (pos("x-left"), pos("x-top"));
+    capture::close(&app);
+    pin::open(&app, &window, state::Frame { width, height, rgba }, x, y)
+}
+
+#[tauri::command]
+fn pin_image(app: AppHandle, window: WebviewWindow) -> Result<tauri::ipc::Response, String> {
+    pin::png(&app, window.label()).map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+fn pin_copy(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    pin::copy(&app, window.label())
+}
+
 // ---------- settings commands ----------
 
 #[derive(Serialize)]
@@ -312,6 +336,7 @@ pub fn run() {
             app.manage(AppState {
                 settings: Mutex::new(s),
                 frames: Mutex::new(Default::default()),
+            pins: Mutex::new(Default::default()),
                 session: Mutex::new(None),
                 hotkeys_paused: Default::default(),
                 tray_items: Mutex::new(None),
@@ -335,6 +360,9 @@ pub fn run() {
             open_url,
             grab_text,
             finish,
+            pin,
+            pin_image,
+            pin_copy,
             get_settings,
             pause_hotkeys,
             set_hotkey,

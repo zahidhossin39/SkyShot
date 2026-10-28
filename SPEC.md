@@ -105,6 +105,12 @@ If a decision changes, update this file in the same commit.
 - Undo is a snapshot history of redactions and notes, so `Ctrl+Z` also reverts moves, edits, recolours and deletes.
 - Not done (skipped on purpose): freehand pen, resizing a placed mark (redraw it instead), font size picker. The toolbar is ~800 CSS px wide now, which fits 1366×768 at 125%.
 
+### Pin to screen (built on experiment/v2)
+- Toolbar pin button or `F`: the overlay closes and the selection floats in an always-on-top window, placed exactly where it was captured (annotations and redactions included).
+- Drag to move. Scroll to zoom (10% steps, 20–500%), and `0` resets to 100%. `Ctrl+C` copies it. `Esc`, double-click or the hover × closes it. Any number of pins can be open.
+- Rust keeps each pin's pixels (`pin.rs`, dropped when its window closes) and gives the page a PNG. Pin windows get their own capability (`capabilities/pin.json`: drag, resize, show, focus, close) instead of widening the overlay's.
+- Tested on the real window via Win32: position, 400×300 client size, zoom, reset, drag, Esc, double-click, Ctrl+C.
+
 ### History rules (v3)
 - **Retention is user-configurable in settings**: number of days (e.g. 1–365) or "forever". Default 30.
   - Changing the value applies to existing shots too (shorten → older ones get deleted).

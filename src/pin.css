@@ -1,0 +1,79 @@
+:root {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #18181b;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Fills the window; the window itself is resized to zoom, so the image stays sharp at 100%. */
+#img {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: move;
+}
+
+/* Thin accent edge so a pin is easy to tell apart from the real screen under it. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border: 1px solid rgba(59, 130, 246, 0.8);
+  pointer-events: none;
+}
+
+#close {
+  position: fixed;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(24, 24, 27, 0.85);
+  color: #ececef;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+body:hover #close {
+  opacity: 1;
+}
+
+#close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(24, 24, 27, 0.9);
+  color: #ececef;
+  white-space: nowrap;
+  pointer-events: none;
+}

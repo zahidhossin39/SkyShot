@@ -23,6 +23,8 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     /// Overlay window label -> frame not yet sent to it.
     pub frames: Mutex<HashMap<String, Frame>>,
+    /// Pin window label -> its image (dropped when the window closes).
+    pub pins: Mutex<HashMap<String, Frame>>,
     pub session: Mutex<Option<Session>>,
     /// True while the settings window is recording a new hotkey.
     pub hotkeys_paused: AtomicBool,
