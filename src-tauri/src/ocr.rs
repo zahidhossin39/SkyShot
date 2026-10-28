@@ -1,73 +1,105 @@
-//! Offline OCR using the engine built into Windows 10/11 (Windows.Media.Ocr).
+﻿//! Offline OCR using the engine built into Windows 10/11 (Windows.Media.Ocr).
 
 /// Recognize text in an RGBA image. Returns lines joined with '\n'.
 #[cfg(windows)]
 pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<String, String> {
+    init();
+    let t = std::time::Instant::now();
+    let max_dim = windows::Media::Ocr::OcrEngine::MaxImageDimension().map_err(|e| e.message().to_string())?;
+
+    // Small text reads much better at 2x (symbols, punctuation; measured on code and
+    // API-key samples), big text slightly worse, and we only learn the size from a pass.
+    // So the 2x pass starts right away in parallel and is used only if text is small.
+    let (tx, rx) = std::sync::mpsc::channel();
+    if can_upscale(width, height, max_dim) {
+        let src = rgba.to_vec();
+        std::thread::spawn(move || {
+            init();
+            let _ = tx.send(read_words(&double(&src, width), width * 2, height * 2));
+        });
+    }
+    let lines = read_words(rgba, width, height)?;
+    if median_height(&lines) < SMALL_TEXT_PX {
+        if let Ok(big) = rx.recv() {
+            println!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
+            return Ok(layout(big?));
+        }
+    }
+    println!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
+    Ok(layout(lines))
+}
+
+/// WinRT needs each calling thread initialized; harmless if it already is.
+#[cfg(windows)]
+fn init() {
+    use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
+    unsafe {
+        let _ = RoInitialize(RO_INIT_MULTITHREADED);
+    }
+}
+
+/// One OCR pass: word boxes grouped by the engine's lines.
+#[cfg(windows)]
+fn read_words(rgba: &[u8], w: u32, h: u32) -> Result<Vec<Vec<Word>>, String> {
     use windows::{
         Graphics::Imaging::{BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap},
         Media::Ocr::OcrEngine,
         Storage::Streams::DataWriter,
-        Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED},
     };
     let err = |e: windows::core::Error| e.message().to_string();
 
-    // WinRT needs the calling thread initialized; harmless if it already is.
-    unsafe {
-        let _ = RoInitialize(RO_INIT_MULTITHREADED);
-    }
-
     let engine = OcrEngine::TryCreateFromUserProfileLanguages()
         .map_err(|_| "No OCR language installed. Add one in Windows Settings > Language.".to_string())?;
-
-    let run = |rgba: &[u8], w: u32, h: u32| -> Result<Vec<Vec<Word>>, String> {
-        let mut bgra = rgba.to_vec();
-        for px in bgra.chunks_exact_mut(4) {
-            px.swap(0, 2); // RGBA -> BGRA
-        }
-        let writer = DataWriter::new().map_err(err)?;
-        writer.WriteBytes(&bgra).map_err(err)?;
-        let buffer = writer.DetachBuffer().map_err(err)?;
-        let bitmap = SoftwareBitmap::CreateCopyWithAlphaFromBuffer(
-            &buffer,
-            BitmapPixelFormat::Bgra8,
-            w as i32,
-            h as i32,
-            BitmapAlphaMode::Premultiplied,
-        )
-        .map_err(err)?;
-        let result = engine.RecognizeAsync(&bitmap).map_err(err)?.join().map_err(err)?;
-
-        let mut lines = Vec::new();
-        for line in result.Lines().map_err(err)? {
-            let mut words = Vec::new();
-            for word in line.Words().map_err(err)? {
-                let r = word.BoundingRect().map_err(err)?;
-                words.push(Word {
-                    x: r.X,
-                    y: r.Y,
-                    w: r.Width,
-                    h: r.Height,
-                    text: word.Text().map_err(err)?.to_string(),
-                });
-            }
-            if !words.is_empty() {
-                lines.push(words);
-            }
-        }
-        Ok(lines)
-    };
-
-    // Pass 1 at native size. If the text turned out small, a 2x upscale reads symbols
-    // and punctuation much better (measured on code and API-key samples), while big
-    // text reads slightly worse upscaled, so only pass 2 when it helps.
-    let lines = run(rgba, width, height)?;
-    let max_dim = OcrEngine::MaxImageDimension().map_err(err)?;
-    if median_height(&lines) < SMALL_TEXT_PX && can_upscale(width, height, max_dim) {
-        let img = image::RgbaImage::from_raw(width, height, rgba.to_vec()).ok_or("bad image buffer")?;
-        let big = image::imageops::resize(&img, width * 2, height * 2, image::imageops::FilterType::CatmullRom);
-        return Ok(layout(run(big.as_raw(), width * 2, height * 2)?));
+    let mut bgra = rgba.to_vec();
+    for px in bgra.chunks_exact_mut(4) {
+        px.swap(0, 2); // RGBA -> BGRA
     }
-    Ok(layout(lines))
+    let writer = DataWriter::new().map_err(err)?;
+    writer.WriteBytes(&bgra).map_err(err)?;
+    let buffer = writer.DetachBuffer().map_err(err)?;
+    let bitmap = SoftwareBitmap::CreateCopyWithAlphaFromBuffer(
+        &buffer,
+        BitmapPixelFormat::Bgra8,
+        w as i32,
+        h as i32,
+        BitmapAlphaMode::Premultiplied,
+    )
+    .map_err(err)?;
+    let result = engine.RecognizeAsync(&bitmap).map_err(err)?.join().map_err(err)?;
+
+    let mut lines = Vec::new();
+    for line in result.Lines().map_err(err)? {
+        let mut words = Vec::new();
+        for word in line.Words().map_err(err)? {
+            let r = word.BoundingRect().map_err(err)?;
+            words.push(Word {
+                x: r.X,
+                y: r.Y,
+                w: r.Width,
+                h: r.Height,
+                text: word.Text().map_err(err)?.to_string(),
+            });
+        }
+        if !words.is_empty() {
+            lines.push(words);
+        }
+    }
+    Ok(lines)
+}
+
+/// 2x upscale by pixel doubling. Reads as well as a smooth resize on the samples and is
+/// ~30x faster than `image::imageops::resize`.
+fn double(rgba: &[u8], width: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity(rgba.len() * 4);
+    for row in rgba.chunks_exact(width as usize * 4) {
+        let start = out.len();
+        for px in row.chunks_exact(4) {
+            out.extend_from_slice(px);
+            out.extend_from_slice(px);
+        }
+        out.extend_from_within(start..);
+    }
+    out
 }
 
 /// Word-box height (px) below which text counts as "small". Picked from the samples:
@@ -176,6 +208,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A realistic selection: all samples tiled into one ~1200x800 image.
+    #[test]
+    fn ocr_big_selection() {
+        let Ok(dir) = std::env::var("OCR_SAMPLES") else { return };
+        let mut big = image::RgbaImage::from_pixel(1200, 800, image::Rgba([255, 255, 255, 255]));
+        let mut y = 0;
+        // Small-text samples only, repeated: the worst case (forces the 2x pass).
+        let small: Vec<_> = ["code", "dark", "small"]
+            .iter()
+            .map(|n| image::open(format!("{dir}/{n}.png")).unwrap().to_rgba8())
+            .collect();
+        'fill: loop {
+            for img in &small {
+                if y + img.height() > 800 { break 'fill; }
+                image::imageops::overlay(&mut big, img, 0, y as i64);
+                image::imageops::overlay(&mut big, img, 650, y as i64);
+                y += img.height();
+            }
+        }
+        let t = std::time::Instant::now();
+        let text = recognize(big.as_raw(), 1200, 800).unwrap();
+        println!("big {} ms, {} lines", t.elapsed().as_millis(), text.lines().count());
+    }
+
+    #[test]
+    fn double_repeats_each_pixel_2x2() {
+        // 2x1 image: red, blue
+        let src = [255, 0, 0, 255, 0, 0, 255, 255];
+        let r = [255, 0, 0, 255];
+        let b = [0, 0, 255, 255];
+        let row = [r, r, b, b].concat();
+        assert_eq!(double(&src, 2), [row.clone(), row].concat());
     }
 
     #[test]

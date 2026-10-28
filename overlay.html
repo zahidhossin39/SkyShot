@@ -14,48 +14,55 @@
     <div id="hint" hidden></div>
     <div id="size" hidden></div>
 
+    <!-- data-name / data-key / data-desc feed the hover tooltip (see overlay.ts). -->
     <div id="toolbar" hidden>
-      <div class="group">
-        <button data-tool="select" title="Select / move (V)">
+      <div class="group" role="group" aria-label="Tools">
+        <button data-tool="select" data-name="Select" data-key="V" data-desc="Move or resize the selection.">
           <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z" /></svg>
         </button>
-        <button data-tool="blur" title="Blur (B)">
+        <button data-tool="blur" data-name="Blur" data-key="B" data-desc="Drag inside the selection to blur. Strong blur can sometimes be undone — use Black box for passwords.">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="2.5 2.5" /><circle cx="12" cy="12" r="3.5" /></svg>
         </button>
-        <button data-tool="pixelate" title="Pixelate (P)">
+        <button data-tool="pixelate" data-name="Pixelate" data-key="P" data-desc="Drag inside the selection to pixelate. Can sometimes be undone — use Black box for passwords.">
           <svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" /><rect x="13" y="13" width="7" height="7" /><rect x="13" y="4" width="7" height="7" class="faint" /><rect x="4" y="13" width="7" height="7" class="faint" /></svg>
         </button>
-        <button data-tool="box" title="Solid box (R) — safest for passwords">
+        <button data-tool="box" data-name="Black box" data-key="R" data-desc="Drag to cover with solid black. Safest for passwords and keys.">
           <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" class="fill" /></svg>
+        </button>
+        <button data-action="undo" data-name="Undo" data-key="Ctrl+Z" data-desc="Remove the last blur, pixelate or box.">
+          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 010 10h-3" /></svg>
         </button>
       </div>
       <div class="group">
-        <button data-action="undo" title="Undo (Ctrl+Z)">
-          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 010 10h-3" /></svg>
-        </button>
-        <button data-action="ocr" title="Extract text (T)">
-          <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M12 4v16M9 20h6" /></svg>
+        <button data-action="ocr" class="label" data-name="Copy text" data-key="T" data-desc="Read the text in the selection, check it, then copy it.">
+          <svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16" /><path d="M8 10h8M8 14h5" /></svg>
+          Text
         </button>
       </div>
-      <div class="group finish">
-        <button data-action="copy" class="text" title="Copy to clipboard (Ctrl+C)">Copy</button>
-        <button data-action="save" class="text" title="Save to your screenshots folder">Save</button>
-        <button data-action="both" class="text primary" title="Copy and save">Both</button>
-        <button data-action="saveas" title="Save as… (Ctrl+S)">
+      <div class="group" role="group" aria-label="Finish">
+        <button data-action="copy" class="label" data-name="Copy" data-key="Ctrl+C" data-desc="Copy the image to the clipboard.">Copy</button>
+        <button data-action="save" class="label" data-name="Save" data-desc="Save a PNG to your screenshots folder.">Save</button>
+        <button data-action="both" class="label primary" data-name="Copy & save" data-key="Enter" data-desc="Copy to the clipboard and save a PNG.">Copy &amp; save</button>
+        <button data-action="saveas" data-name="Save as…" data-key="Ctrl+S" data-desc="Pick a folder and file name.">
           <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h7V4M8 20v-6h8v6" /></svg>
         </button>
       </div>
       <div class="group">
-        <button data-action="close" title="Cancel (Esc)">
+        <button data-action="close" data-name="Cancel" data-key="Esc" data-desc="Close without saving. Right-click works too.">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
     </div>
 
+    <div id="tip" role="tooltip" hidden>
+      <div class="tip-head"><strong id="tip-name"></strong><kbd id="tip-key"></kbd></div>
+      <p id="tip-desc"></p>
+    </div>
+
     <div id="textpanel" hidden>
       <div class="panel-head">
         <span id="text-status">Reading text…</span>
-        <button id="text-close" title="Close">
+        <button id="text-close" aria-label="Close">
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>

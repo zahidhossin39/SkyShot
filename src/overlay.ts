@@ -205,11 +205,13 @@ function updateChrome() {
   const s = scale();
   const has = !!sel && sel.w >= MIN_SIZE && sel.h >= MIN_SIZE;
 
-  hint.hidden = !!sel;
-  hint.textContent =
-    mode === "text"
-      ? "Drag over text to copy it  ·  Esc to cancel"
-      : "Drag to select an area  ·  Esc to cancel";
+  setHint(
+    !sel
+      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+      : has && mode === "capture" && tool !== "select"
+        ? `${TOOL_HINTS[tool]}${SEP}<kbd>Ctrl+Z</kbd> undo${SEP}<kbd>V</kbd> done`
+        : null,
+  );
 
   sizeLabel.hidden = !has;
   if (has && sel) {
@@ -221,6 +223,7 @@ function updateChrome() {
 
   const showBar = has && mode === "capture" && !drag;
   toolbar.hidden = !showBar;
+  if (!showBar) hideTip();
   if (showBar && sel) {
     toolbar.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) =>
       b.classList.toggle("active", b.dataset.tool === tool),
@@ -229,6 +232,47 @@ function updateChrome() {
     placeNear(toolbar, sel);
   }
   if (!panel.hidden && sel) placePanel();
+}
+
+const SEP = '<span class="sep">·</span>';
+const TOOL_HINTS: Record<RedactTool, string> = {
+  blur: "Drag inside the selection to blur",
+  pixelate: "Drag inside the selection to pixelate",
+  box: "Drag inside the selection to black it out",
+};
+
+let hintHtml: string | null = null;
+/** Top-centre pill. Fixed strings only, so innerHTML is safe. */
+function setHint(html: string | null) {
+  hint.hidden = !html;
+  if (html && html !== hintHtml) hint.innerHTML = html;
+  hintHtml = html;
+}
+
+// Hover tooltip: name, shortcut and what the button does. The first hover waits a
+// beat; sliding along the bar after that shows each tip instantly.
+const tip = $("tip");
+let tipTimer = 0;
+let tipHiddenAt = 0;
+
+function showTip(btn: HTMLElement) {
+  $("tip-name").textContent = btn.dataset.name ?? "";
+  $("tip-key").textContent = btn.dataset.key ?? "";
+  $("tip-desc").textContent = btn.dataset.desc ?? "";
+  tip.hidden = false;
+  const b = btn.getBoundingClientRect();
+  const bar = toolbar.getBoundingClientRect();
+  const left = Math.max(8, Math.min(window.innerWidth - tip.offsetWidth - 8, b.left + b.width / 2 - tip.offsetWidth / 2));
+  let top = bar.top - tip.offsetHeight - 8;
+  if (top < 8) top = bar.bottom + 8;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (!tip.hidden) tipHiddenAt = performance.now();
+  tip.hidden = true;
 }
 
 /** Below the selection, right-aligned; flips above, then inside, if out of room. */
@@ -314,7 +358,9 @@ function reset() {
   ops = [];
   drag = null;
   pendingOp = null;
-  toolbar.hidden = panel.hidden = sizeLabel.hidden = hint.hidden = true;
+  toolbar.hidden = panel.hidden = sizeLabel.hidden = true;
+  setHint(null);
+  hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
   view.width = view.height = ui.width = ui.height = 1;
   W = H = 0;
@@ -359,6 +405,7 @@ async function grabText() {
 async function extractText() {
   if (!sel || busy) return;
   panel.hidden = false;
+  panel.classList.add("loading");
   textStatus.textContent = "Reading text…";
   textOut.value = "";
   placePanel();
@@ -367,10 +414,12 @@ async function extractText() {
     const text = await invoke<string>("ocr_image", bytes, { headers });
     textOut.value = text;
     const words = text.split(/\s+/).filter(Boolean).length;
-    textStatus.textContent = text.trim() ? `${words} words found — edit, then copy` : "No text found";
+    textStatus.textContent = text.trim() ? `${words} words found — fix anything, then copy` : "No text found in this area";
     textOut.focus();
   } catch (e) {
     textStatus.textContent = String(e);
+  } finally {
+    panel.classList.remove("loading");
   }
 }
 
@@ -495,6 +544,7 @@ window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && k === "c") return finish("copy"), true;
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
+    if (k === "enter") return finish("both"), true;
     const tools: Record<string, Tool> = { v: "select", b: "blur", p: "pixelate", r: "box" };
     if (tools[k]) return setTool(tools[k]), true;
     if (k === "t") return extractText(), true;
@@ -517,8 +567,21 @@ toolbar.addEventListener("click", (e) => {
     case "close": return void close();
   }
 });
+toolbar.addEventListener("pointerover", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-name]");
+  if (!btn) return;
+  clearTimeout(tipTimer);
+  const warm = !tip.hidden || performance.now() - tipHiddenAt < 600;
+  tipTimer = window.setTimeout(() => showTip(btn), warm ? 0 : 350);
+});
+toolbar.addEventListener("pointerleave", hideTip);
+toolbar.querySelectorAll<HTMLElement>("[data-name]").forEach((b) => b.setAttribute("aria-label", b.dataset.name!));
+
 // Keep toolbar clicks from starting a new selection underneath.
-toolbar.addEventListener("mousedown", (e) => e.stopPropagation());
+toolbar.addEventListener("mousedown", (e) => {
+  e.stopPropagation();
+  hideTip();
+});
 panel.addEventListener("mousedown", (e) => e.stopPropagation());
 
 $("text-close").addEventListener("click", () => (panel.hidden = true));

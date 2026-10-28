@@ -1,13 +1,23 @@
 :root {
   --accent: #3b82f6;
-  --bar-bg: rgba(24, 24, 27, 0.96);
-  --bar-fg: #e4e4e7;
+  --accent-strong: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.22);
+  --bar-bg: #18181b;
+  --bar-raised: #232328;
+  --bar-fg: #ececef;
   --bar-muted: #a1a1aa;
   --bar-hover: rgba(255, 255, 255, 0.08);
-  --bar-active: rgba(59, 130, 246, 0.28);
-  --bar-border: rgba(255, 255, 255, 0.1);
+  --bar-line: rgba(255, 255, 255, 0.09);
+  --shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
+}
+
+/* Elements below set their own `display`, which would otherwise beat `hidden`
+   (that bug made the text panel show on every capture). */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -31,18 +41,34 @@ canvas {
   cursor: crosshair;
 }
 
+/* ---------------------------------------------------------------- hint + size */
+
 #hint {
   position: fixed;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 8px 14px;
+  padding: 7px 14px;
   border-radius: 999px;
   background: var(--bar-bg);
   color: var(--bar-fg);
-  border: 1px solid var(--bar-border);
+  box-shadow: var(--shadow);
   pointer-events: none;
   white-space: nowrap;
+}
+
+#hint kbd,
+#tip kbd {
+  font: 600 11px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--bar-fg);
+}
+
+#hint .sep {
+  color: var(--bar-muted);
+  padding: 0 6px;
 }
 
 #size {
@@ -57,15 +83,18 @@ canvas {
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------- toolbar */
+
 #toolbar {
   position: fixed;
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 12px;
   background: var(--bar-bg);
-  border: 1px solid var(--bar-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
+  animation: rise 160ms var(--ease-out);
 }
 
 #toolbar .group {
@@ -74,36 +103,49 @@ canvas {
 }
 
 #toolbar .group + .group {
-  padding-left: 4px;
-  border-left: 1px solid var(--bar-border);
+  padding-left: 6px;
+  border-left: 1px solid var(--bar-line);
 }
 
 button {
-  display: grid;
-  place-items: center;
-  min-width: 32px;
-  height: 32px;
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--bar-fg);
   font: inherit;
   cursor: pointer;
+  transition: background-color 120ms, color 120ms;
 }
 
 button:hover {
   background: var(--bar-hover);
 }
 
-button.active {
-  background: var(--bar-active);
-  color: #fff;
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-button.text {
-  padding: 0 10px;
+/* Active tool: tinted fill plus accent icon, readable at a glance. */
+button.active {
+  background: var(--accent-soft);
+  color: #9cc3ff;
+}
+
+button.label {
+  padding: 0 12px;
   font-weight: 500;
+}
+
+button.label svg {
+  margin-left: -2px;
 }
 
 button.primary {
@@ -112,7 +154,7 @@ button.primary {
 }
 
 button.primary:hover {
-  background: #2563eb;
+  background: var(--accent-strong);
 }
 
 button:disabled {
@@ -124,6 +166,7 @@ button:disabled {
 button svg {
   width: 18px;
   height: 18px;
+  flex: none;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -139,18 +182,55 @@ button svg .faint {
   opacity: 0.35;
 }
 
+/* ---------------------------------------------------------------- tooltip */
+
+#tip {
+  position: fixed;
+  max-width: 240px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bar-raised);
+  color: var(--bar-fg);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: fade 90ms ease-out;
+}
+
+.tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#tip strong {
+  font-weight: 600;
+}
+
+#tip kbd:empty {
+  display: none;
+}
+
+#tip p {
+  margin: 4px 0 0;
+  color: var(--bar-muted);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------- text panel */
+
 #textpanel {
   position: fixed;
-  width: 380px;
+  width: 400px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--bar-bg);
-  border: 1px solid var(--bar-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
   color: var(--bar-fg);
+  animation: rise 160ms var(--ease-out);
 }
 
 .panel-head,
@@ -160,23 +240,41 @@ button svg .faint {
   justify-content: space-between;
 }
 
+.panel-head {
+  padding-left: 4px;
+}
+
 .panel-foot {
   justify-content: flex-end;
 }
 
 #text-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--bar-muted);
+}
+
+#textpanel.loading #text-status::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bar-line);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
 }
 
 #text-out {
   height: 160px;
   resize: vertical;
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--bar-border);
-  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bar-line);
+  background: #0f0f11;
   color: var(--bar-fg);
-  font: 13px/1.45 "Cascadia Mono", Consolas, monospace;
+  /* Monospace because OCR output is often code, keys or URLs, where spacing matters. */
+  font: 13px/1.5 "Cascadia Mono", Consolas, monospace;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -184,4 +282,33 @@ button svg .faint {
 #text-out:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
+}
+
+/* ---------------------------------------------------------------- motion */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #toolbar,
+  #tip,
+  #textpanel {
+    animation: none;
+  }
 }

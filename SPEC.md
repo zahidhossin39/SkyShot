@@ -30,9 +30,11 @@ If a decision changes, update this file in the same commit.
 2. Drag a region.
 3. A toolbar appears **right next to the selection**. There is no separate editor window.
 4. Edit (blur, OCR, etc.).
-5. Finish → **ask every time** via toolbar buttons: **Copy / Save / Both**.
-   - Save default location: `Pictures\Screenshots\<date-time>.png`. Ctrl+S = save as.
+5. Finish → **ask every time** via toolbar buttons: **Copy / Save / Copy & save**.
+   - Save default location: `Pictures\Screenshots\<date-time>.png`. Ctrl+S = save as. Enter = Copy & save.
    - Esc cancels.
+   - Every toolbar button has a hover tooltip: name, shortcut key, and one line on what it does. A redaction tool shows a hint pill at the top while it's active.
+   - Text reading (OCR) runs only when asked for: the **Text** button or T.
 
 ### Displays
 - Multi-monitor and mixed DPI scaling (100/125/150 %) must work from v1.
@@ -104,7 +106,7 @@ If a decision changes, update this file in the same commit.
 - In-place region capture across all monitors, DPI-correct.
 - Blur / Pixelate / Solid box.
 - Offline OCR: copy-all popup + instant text hotkey.
-- Finish prompt: Copy / Save / Both.
+- Finish prompt: Copy / Save / Copy & save.
 
 ### v2: differentiators
 - Live Text, Smart actions, Smart Redact, annotation tools.
@@ -137,7 +139,10 @@ If a decision changes, update this file in the same commit.
 
 ### Spike results (2026-10-28)
 
-- **OCR:** Windows OCR in Rust gets ~100% on prose, UI text, URLs, and keys in 6–23 ms. Code is decent. Small text needs upscaling. Rule: run once at native size. If the median word height is under 16 px, re-run at 2×. Upscaling everything hurt normal text, so the threshold stays.
+- **OCR:** Windows OCR in Rust gets ~100% on prose, UI text, URLs, and keys. Small text needs upscaling. Rule: a 2× pass runs in parallel with the native pass, and its result is used only if the median word height is under 16 px. Upscaling everything hurt normal text, so the threshold stays.
+  - The 2× upscale is plain pixel doubling. It reads as well as a smooth resize and costs 12 ms instead of 600+ ms on a 1200×800 area.
+  - Timing (dev build): 7–34 ms for typical selections. The worst case is a 1200×800 area of small text at ~430 ms, which used to take ~4 s.
+  - The dev profile builds our own crate with `opt-level = 1`, because generic image code compiled unoptimized was ~20× slower.
 - **Overlay speed (debug build, 1 monitor, warm hidden window):** hotkey→visible is **95–111 ms** when the machine is idle and ~170–200 ms under load. Sending the 8 MB frame through Tauri IPC took 88–124 ms. The fix is to post it as WebView2 shared memory (`PostSharedBufferToScript`), which takes 14–35 ms. Fast PNG was tried and was slower: encoding plus decoding cost more than the transfer it saved.
 - **Hotkey conflict:** running Lightshot owns `Shift+PrtSc`. Kept it as the default anyway, since Lightshot is being replaced. Settings shows "Not active" until Lightshot is closed.
 - v1 selection is per monitor; it can't span monitors.
