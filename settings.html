@@ -69,6 +69,31 @@
       </section>
 
       <section>
+        <h2>AI re-read</h2>
+        <div class="row">
+          <div class="grow">
+            <div class="label">Provider</div>
+            <div class="path">For blurry text or handwriting. Only the area you click "Re-read with AI" on is sent, with your own key.</div>
+          </div>
+          <select id="ai-provider">
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="gemini">Gemini (Google)</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="grow">
+            <div class="label">API key</div>
+            <div class="status" id="ai-key-status"></div>
+          </div>
+          <div class="btns">
+            <input type="password" id="ai-key" placeholder="Paste key" autocomplete="off" spellcheck="false" />
+            <button id="ai-save">Save</button>
+          </div>
+        </div>
+        <button class="link" id="ai-remove" hidden>Remove key</button>
+      </section>
+
+      <section>
         <h2>General</h2>
         <label class="row">
           <span class="label">Start with Windows</span>

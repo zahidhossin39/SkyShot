@@ -10,6 +10,8 @@ type SettingsView = {
   saveDirIsDefault: boolean;
   autostart: boolean;
   historyDays: number;
+  aiProvider: "claude" | "gemini";
+  aiKeyHint: string;
 };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -51,6 +53,13 @@ function render(v: SettingsView) {
     days.add(new Option(`${v.historyDays} days`, String(v.historyDays)));
   }
   days.value = String(v.historyDays);
+  $<HTMLSelectElement>("ai-provider").value = v.aiProvider;
+  const name = v.aiProvider === "gemini" ? "Gemini" : "Claude";
+  setStatus($("ai-key-status"), !!v.aiKeyHint);
+  $("ai-key-status").textContent = v.aiKeyHint
+    ? `${name} key saved (${v.aiKeyHint}) in Windows Credential Manager`
+    : `No ${name} key. Text is read on your PC only.`;
+  $("ai-remove").hidden = !v.aiKeyHint;
 }
 
 function setStatus(el: HTMLElement, active: boolean) {
@@ -183,5 +192,24 @@ $<HTMLSelectElement>("history-days").addEventListener("change", async (e) => {
   }
 });
 $("open-history").addEventListener("click", () => invoke("open_history_window"));
+
+async function setAi(key?: string) {
+  const provider = $<HTMLSelectElement>("ai-provider").value;
+  try {
+    render(await invoke<SettingsView>("set_ai", { provider, key }));
+    $<HTMLInputElement>("ai-key").value = "";
+  } catch (err) {
+    showError(String(err));
+  }
+}
+$("ai-provider").addEventListener("change", () => setAi());
+$("ai-save").addEventListener("click", () => {
+  const key = $<HTMLInputElement>("ai-key").value.trim();
+  if (key) setAi(key);
+});
+$("ai-key").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("ai-save").click();
+});
+$("ai-remove").addEventListener("click", () => setAi(""));
 
 refresh();

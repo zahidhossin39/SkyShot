@@ -587,6 +587,28 @@ function closeText() {
   getSelection()?.removeAllRanges();
 }
 
+/** Better read of the same area by the user's AI provider. Replaces the panel text only. */
+async function aiReread() {
+  if (!sel || busy) return;
+  const r = sel;
+  const btn = $<HTMLButtonElement>("text-ai");
+  btn.disabled = true;
+  panel.classList.add("loading");
+  textStatus.textContent = "AI is reading this area…";
+  const { bytes, headers } = cropSelection(); // already redacted: hidden text is never sent
+  try {
+    const text = await invoke<string>("ai_reread", bytes, { headers });
+    if (panel.hidden || sel !== r) return;
+    textOut.value = text;
+    textStatus.textContent = text ? "Re-read by AI — check it, then copy" : "AI found no text in this area";
+  } catch (e) {
+    textStatus.textContent = String(e);
+  } finally {
+    panel.classList.remove("loading");
+    btn.disabled = false;
+  }
+}
+
 async function copyValue(text: string) {
   try {
     await invoke("copy_text", { text });
@@ -1090,6 +1112,7 @@ $("text-close").addEventListener("click", () => {
   updateChrome();
 });
 $("text-copy").addEventListener("click", () => copyValue(textOut.value));
+$("text-ai").addEventListener("click", aiReread);
 
 // ---------------------------------------------------------------- wiring
 

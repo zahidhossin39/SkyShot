@@ -181,6 +181,21 @@ select {
   padding: 5px 8px;
 }
 
+input[type="password"] {
+  width: 180px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+input[type="password"]:focus {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 input[type="checkbox"] {
   width: 18px;
   height: 18px;

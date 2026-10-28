@@ -42,6 +42,11 @@ windows = { version = "0.62", features = [
   "Media_Ocr",
   "Storage_Streams",
   "Win32_System_WinRT",
+  # AI re-read: HTTPS via Windows' own client, base64, and the API key in Credential Manager.
+  "Web_Http",
+  "Web_Http_Headers",
+  "Security_Cryptography",
+  "Security_Credentials",
 ] }
 # Same version Tauri uses; needed to post frames to the overlay via shared memory.
 webview2-com = "0.39"

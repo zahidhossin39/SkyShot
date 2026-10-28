@@ -1,3 +1,4 @@
+mod ai;
 mod capture;
 mod history;
 mod hotkeys;
@@ -35,7 +36,7 @@ pub fn open_settings(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Screenshot App — Settings")
-        .inner_size(520.0, 520.0)
+        .inner_size(560.0, 720.0)
         .resizable(false)
         .maximizable(false)
         .center()
@@ -125,6 +126,20 @@ async fn ocr_image(request: Request<'_>) -> Result<ocr::Ocr, String> {
     tauri::async_runtime::spawn_blocking(move || ocr::recognize(&rgba, w, h))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Re-read the selection with the user's AI provider. Only this one image is sent.
+#[tauri::command]
+async fn ai_reread(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+    let (rgba, w, h) = raw_image(&request)?;
+    let provider = app.state::<AppState>().settings.lock().unwrap().ai_provider.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = ai::key(&provider)
+            .ok_or_else(|| format!("No {} API key yet. Add one in Settings → AI re-read.", ai::label(&provider)))?;
+        ai::reread(&provider, &key, &rgba, w, h)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -292,6 +307,9 @@ struct SettingsView {
     save_dir_is_default: bool,
     autostart: bool,
     history_days: u32,
+    ai_provider: String,
+    /// "…ab12" for the saved key, or empty. The key itself never goes to the page.
+    ai_key_hint: String,
 }
 
 fn settings_view(app: &AppHandle) -> SettingsView {
@@ -303,6 +321,8 @@ fn settings_view(app: &AppHandle) -> SettingsView {
         save_dir_is_default: s.save_dir.is_empty(),
         autostart: app.autolaunch().is_enabled().unwrap_or(false),
         history_days: s.history_days,
+        ai_key_hint: ai::key(&s.ai_provider).map(|k| ai::hint(&k)).unwrap_or_default(),
+        ai_provider: s.ai_provider,
         hotkey_capture: s.hotkey_capture,
         hotkey_text: s.hotkey_text,
     }
@@ -390,6 +410,25 @@ fn set_history_days(app: AppHandle, days: u32) -> Result<SettingsView, String> {
     Ok(settings_view(&app))
 }
 
+/// Pick the provider and save (or, with an empty key, keep / remove) its key.
+#[tauri::command]
+fn set_ai(app: AppHandle, provider: String, key: Option<String>) -> Result<SettingsView, String> {
+    if !ai::PROVIDERS.contains(&provider.as_str()) {
+        return Err("Unknown AI provider".into());
+    }
+    match key.as_deref().map(str::trim) {
+        Some("") => ai::remove_key(&provider),
+        Some(k) => ai::save_key(&provider, k)?,
+        None => {} // only switching provider
+    }
+    let state = app.state::<AppState>();
+    let mut s = state.settings.lock().unwrap().clone();
+    s.ai_provider = provider;
+    settings::save(&app, &s)?;
+    *state.settings.lock().unwrap() = s;
+    Ok(settings_view(&app))
+}
+
 #[tauri::command]
 fn set_autostart(app: AppHandle, enabled: bool) -> Result<SettingsView, String> {
     let al = app.autolaunch();
@@ -455,6 +494,8 @@ pub fn run() {
             overlay_close,
             ocr_image,
             copy_text,
+            ai_reread,
+            set_ai,
             open_url,
             grab_text,
             finish,

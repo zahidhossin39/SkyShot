@@ -49,7 +49,7 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
 
 /// WinRT needs each calling thread initialized; harmless if it already is.
 #[cfg(windows)]
-fn init() {
+pub(crate) fn init() {
     use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
     unsafe {
         let _ = RoInitialize(RO_INIT_MULTITHREADED);
