@@ -16,13 +16,14 @@ Deferred v1 items:
 - Push to GitHub: needs owner OK + co-author answer.
 - App name undecided. Shortlist (checked, no app found): Stillpane (top pick), Lensnip, Vitrashot, Glimpshot, Snaptic, Scrimshot. Taken: Veilshot, Hushshot, Cloakshot, Bokashi, Frisket (all screenshot-redaction tools), Snapture, Captureist, Pixsnip.
 
-v2 work happens on branch `experiment/v2` (owner's call). Order: Smart Redact (done) -> Live Text + Smart actions (done) -> annotations (next). Both done parts are only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser).
+v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built: Smart Redact, Live Text + Smart actions, annotations. They're only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser). Then merge to main (owner's call) and move to v3.
 
 ## How things work (non-obvious)
 
 - Overlay windows (`overlay-N`, one per monitor) are pre-created hidden. Frame goes Rust -> page via WebView2 shared memory (`capture::post_frame`, `sharedbufferreceived` event), not IPC: IPC cost ~100 ms for 8 MB.
 - All overlay geometry is physical pixels; `scale() = W / innerWidth`.
-- Redactions are an ops list burned into the canvas; undo replays from the original ImageData.
+- Redactions are an ops list burned into the canvas, copied to a `base` canvas. Annotations (`notes`, drawn by `annotate.ts`) are redrawn over `base` on every change, so they stay on top. Undo = `history` snapshots of both; it re-blurs only if ops changed.
+- Browser mock pane scales oddly; to see the canvas, draw a downscaled copy into a fixed `<img>` top-left and `zoom` on it. Drive input with dispatched MouseEvents in physical px / scale().
 - OCR (`ocr.rs`): native pass + parallel 2x pixel-doubled pass; 2x result used if median word height < 16 px. `ocr_samples` / `ocr_big_selection` tests need `OCR_SAMPLES` env (sample PNGs were in the session scratchpad; regenerate if needed).
 - `ocr_image` returns `{ text, lines }`: `lines` = word boxes per engine line, in the selection's pixels (2x pass already halved back). `ocr_boxes_match_native_pass` checks that and dumps `<sample>.json` for the JS detector.
 - JS unit tests: `npm test` (node's built-in runner, TS run natively; `*.test.ts` is excluded from tsc).

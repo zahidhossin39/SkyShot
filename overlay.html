@@ -11,16 +11,39 @@
     <canvas id="view"></canvas>
     <canvas id="ui"></canvas>
     <div id="livetext" hidden></div>
+    <textarea id="note-input" rows="1" spellcheck="false" hidden></textarea>
 
     <div id="hint" hidden></div>
     <div id="size" hidden></div>
 
     <!-- data-name / data-key / data-desc feed the hover tooltip (see overlay.ts). -->
     <div id="toolbar" hidden>
-      <div class="group" role="group" aria-label="Tools">
-        <button data-tool="select" data-name="Select" data-key="V" data-desc="Move or resize the selection.">
+      <div class="group">
+        <button data-tool="select" data-name="Select" data-key="V" data-desc="Move or resize the selection. Click an arrow, box or text to move, recolour or delete it.">
           <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z" /></svg>
         </button>
+      </div>
+      <div class="group" role="group" aria-label="Annotate">
+        <button data-tool="arrow" data-name="Arrow" data-key="A" data-desc="Drag to point at something.">
+          <svg viewBox="0 0 24 24"><path d="M5 19L19 5M10 5h9v9" /></svg>
+        </button>
+        <button data-tool="rect" data-name="Box" data-key="O" data-desc="Drag to draw an outline around something.">
+          <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1.5" /></svg>
+        </button>
+        <button data-tool="mark" data-name="Highlighter" data-key="H" data-desc="Drag over text to highlight it.">
+          <svg viewBox="0 0 24 24"><path d="M14 4l6 6-8 8H6v-6z" /><path d="M4 21h16" class="faint" /></svg>
+        </button>
+        <button data-tool="text" data-name="Text note" data-key="W" data-desc="Click to type a note on the image. Double-click it later to edit.">
+          <svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6" /></svg>
+        </button>
+        <button data-tool="step" data-name="Steps" data-key="N" data-desc="Click to add numbered badges: 1, 2, 3… They renumber if you delete one.">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M11 9.5l1.5-1V16" /></svg>
+        </button>
+        <button data-action="color" data-name="Colour" data-key="C" data-desc="Change colour for new marks, or for the selected one.">
+          <span class="swatch"></span>
+        </button>
+      </div>
+      <div class="group" role="group" aria-label="Redact">
         <button data-tool="blur" data-name="Blur" data-key="B" data-desc="Drag inside the selection to blur. Strong blur can sometimes be undone — use Black box for passwords.">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="2.5 2.5" /><circle cx="12" cy="12" r="3.5" /></svg>
         </button>
@@ -33,11 +56,11 @@
         <button data-action="smart" data-name="Smart redact" data-key="S" data-desc="Find emails, phone and card numbers, IPs and API keys, then hide the ones you pick. Uses Black box unless Blur or Pixelate is on.">
           <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" /><path d="M9 12h6" /></svg>
         </button>
-        <button data-action="undo" data-name="Undo" data-key="Ctrl+Z" data-desc="Remove the last blur, pixelate or box.">
-          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 010 10h-3" /></svg>
-        </button>
       </div>
       <div class="group">
+        <button data-action="undo" data-name="Undo" data-key="Ctrl+Z" data-desc="Undo the last mark, move, edit or redaction.">
+          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 010 10h-3" /></svg>
+        </button>
         <button data-action="ocr" class="label" data-name="Copy text" data-key="T" data-desc="Read the text in the selection, check it, then copy it.">
           <svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16" /><path d="M8 10h8M8 14h5" /></svg>
           Text

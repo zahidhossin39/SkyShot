@@ -98,6 +98,13 @@ If a decision changes, update this file in the same commit.
 | AI re-read | See §5. | v3 |
 | Scrolling capture | Auto-scroll and stitch long pages/chats. Hard. | v3 |
 
+### Annotations (built on experiment/v2)
+- Tools: Arrow `A`, Box outline `O`, Highlighter `H` (rectangle, multiply blend so text stays crisp), Text note `W`, Steps `N` (numbered badges that renumber when one is deleted). Colour `C` cycles red / yellow / green / blue / black.
+- Editable after placing: with Select (`V`), click a mark to pick it (dashed outline), drag to move, `Del` deletes it, `C` recolours it, double-click a text note to edit it. Text: `Enter` done, `Shift+Enter` new line, `Esc` discard, clicking away also finishes it.
+- Annotations always sit above redactions: a blur drawn over an arrow never smears the arrow. Why: the redacted image is kept as a separate base canvas, and notes are redrawn on top. That also makes moving a note cheap, with no re-blur.
+- Undo is a snapshot history of redactions and notes, so `Ctrl+Z` also reverts moves, edits, recolours and deletes.
+- Not done (skipped on purpose): freehand pen, resizing a placed mark (redraw it instead), font size picker. The toolbar is ~800 CSS px wide now, which fits 1366×768 at 125%.
+
 ### History rules (v3)
 - **Retention is user-configurable in settings**: number of days (e.g. 1–365) or "forever". Default 30.
   - Changing the value applies to existing shots too (shorten → older ones get deleted).

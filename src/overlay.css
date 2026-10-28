@@ -290,6 +290,34 @@ button.chip {
   display: block;
 }
 
+/* Colour button: the current annotation colour. */
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+
+/* Text note being typed. Same font/spacing as annotate.ts draws it, so nothing jumps on Enter. */
+#note-input {
+  position: fixed;
+  min-width: 2ch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 1px dashed var(--accent);
+  outline-offset: 3px;
+  background: transparent;
+  font-family: "Segoe UI", sans-serif;
+  font-weight: 600;
+  line-height: 1.25;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content; /* grow with the text (Chromium / WebView2) */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* ---------------------------------------------------------------- live text */
 
 /* Invisible words over the image: only the selection highlight shows. */

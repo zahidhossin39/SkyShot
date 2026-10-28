@@ -6,13 +6,14 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { COLORS, drawNote, FONT_PX, isTiny, moved, noteAt, noteBox, type Note, type NoteKind, type Point, type Rect } from "./annotate";
 import { findActions, findSensitive, type Action, type Word } from "./detect";
 
 type Mode = "capture" | "text";
-type Tool = "select" | "blur" | "pixelate" | "box";
-type RedactTool = Exclude<Tool, "select">;
-type Rect = { x: number; y: number; w: number; h: number };
-type Point = { x: number; y: number };
+type RedactTool = "blur" | "pixelate" | "box";
+type Tool = "select" | RedactTool | NoteKind;
+const isRedact = (t: Tool): t is RedactTool => t === "blur" || t === "pixelate" || t === "box";
+const isNote = (t: Tool): t is NoteKind => t !== "select" && !isRedact(t);
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type OpenPayload = { mode: Mode; width: number; height: number };
 type Op = { tool: RedactTool; rects: Rect[] };
@@ -23,7 +24,9 @@ type Drag =
   | { kind: "new"; origin: Point }
   | { kind: "move"; origin: Point; start: Rect }
   | { kind: "resize"; origin: Point; start: Rect; handle: Handle }
-  | { kind: "op"; origin: Point };
+  | { kind: "op"; origin: Point }
+  | { kind: "note"; origin: Point } // drawing the last note in `notes`
+  | { kind: "notemove"; origin: Point; start: Note };
 
 const ACCENT = "#3b82f6";
 const MIN_SIZE = 3;
@@ -44,8 +47,12 @@ const textActions = $("text-actions");
 const smartbar = $("smartbar");
 const smartStatus = $("smart-status");
 const smartApply = $<HTMLButtonElement>("smart-apply");
+const noteInput = $<HTMLTextAreaElement>("note-input");
 const tmp = document.createElement("canvas");
 const tctx = tmp.getContext("2d")!;
+/** Screenshot + redactions, without annotations, so notes can be redrawn on every mouse move. */
+const base = document.createElement("canvas");
+const bctx = base.getContext("2d")!;
 
 let mode: Mode = "capture";
 let W = 0;
@@ -61,6 +68,13 @@ let pendingOp: Rect | null = null;
 let smart: Smart | null = null;
 /** Live Text words, per OCR line, while the text panel is open. */
 let live: { el: HTMLElement; text: string }[][] | null = null;
+let notes: Note[] = [];
+let picked = -1; // selected note, for move / delete / recolour
+let color = COLORS[0];
+/** Text note being typed: where, and which note it replaces (-1 = new). */
+let editing: { at: Point; idx: number } | null = null;
+/** Undo snapshots. Covers redactions and every annotation change (add, move, edit, delete). */
+let history: { ops: Op[]; notes: Note[] }[] = [];
 
 /** Physical pixels per CSS pixel. */
 const scale = () => (W ? W / window.innerWidth : window.devicePixelRatio);
@@ -165,15 +179,45 @@ function applyRect(tool: RedactTool, { x, y, w, h }: Rect) {
   vctx.restore();
 }
 
+/** Redactions changed: rebuild the base (original + redactions), then the notes on top. */
 function renderImage() {
   if (!original) return;
   vctx.putImageData(original, 0, 0);
   ops.forEach(applyOp);
+  bctx.drawImage(view, 0, 0);
+  drawNotes();
+}
+
+/** Annotations changed: base + every note. Cheap, so it runs on every mouse move. */
+function drawNotes() {
+  vctx.drawImage(base, 0, 0);
+  const s = scale();
+  let step = 0;
+  notes.forEach((n, i) => i !== editing?.idx && drawNote(vctx, n, s, n.kind === "step" ? ++step : 0));
+}
+
+const snapshot = () => history.push({ ops: [...ops], notes: structuredClone(notes) });
+
+/** Burn a new redaction into the base, under the annotations (so arrows never get blurred). */
+function addRedaction(op: Op) {
+  snapshot();
+  ops.push(op);
+  vctx.drawImage(base, 0, 0);
+  applyOp(op);
+  bctx.drawImage(view, 0, 0);
+  drawNotes();
 }
 
 function undo() {
-  if (ops.pop()) renderImage();
+  const prev = history.pop();
+  if (!prev) return;
+  const redactionsChanged = prev.ops.length !== ops.length;
+  ({ ops, notes } = prev);
+  picked = -1;
+  if (redactionsChanged) renderImage();
+  else drawNotes();
   updateChrome();
+  renderUI();
 }
 
 // ---------------------------------------------------------------- drawing UI
@@ -213,6 +257,15 @@ function renderUI() {
     uctx.setLineDash([]);
   }
 
+  if (notes[picked]) {
+    const b = noteBox(vctx, notes[picked], s);
+    const pd = 5 * s;
+    uctx.setLineDash([4 * s, 3 * s]);
+    uctx.strokeStyle = ACCENT;
+    uctx.strokeRect(b.x - pd, b.y - pd, b.w + 2 * pd, b.h + 2 * pd);
+    uctx.setLineDash([]);
+  }
+
   // Smart Redact suggestions: red = will be hidden, faint = kept visible.
   if (smart) {
     uctx.setLineDash([4 * s, 3 * s]);
@@ -237,7 +290,11 @@ function updateChrome() {
       : live
       ? `Drag over the image to select text${SEP}<kbd>Ctrl+C</kbd> copy${SEP}<kbd>Esc</kbd> close`
       : !sel
-      ?`${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+      : editing
+      ? `Type your text${SEP}<kbd>Enter</kbd> done${SEP}<kbd>Shift+Enter</kbd> new line${SEP}<kbd>Esc</kbd> discard`
+      : notes[picked] && tool === "select"
+      ? `Drag to move${SEP}<kbd>Del</kbd> delete${SEP}<kbd>C</kbd> colour${SEP}Double-click text to edit`
       : has && mode === "capture" && tool !== "select"
         ? `${TOOL_HINTS[tool]}${SEP}<kbd>Ctrl+Z</kbd> undo${SEP}<kbd>V</kbd> done`
         : null,
@@ -271,17 +328,23 @@ function updateChrome() {
     toolbar.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) =>
       b.classList.toggle("active", b.dataset.tool === tool),
     );
-    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = ops.length === 0;
+    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = history.length === 0;
+    toolbar.querySelector<HTMLElement>(".swatch")!.style.background = color;
     placeNear(toolbar, sel);
   }
   if (!panel.hidden && sel) placePanel();
 }
 
 const SEP = '<span class="sep">·</span>';
-const TOOL_HINTS: Record<RedactTool, string> = {
+const TOOL_HINTS: Record<Exclude<Tool, "select">, string> = {
   blur: "Drag inside the selection to blur",
   pixelate: "Drag inside the selection to pixelate",
   box: "Drag inside the selection to black it out",
+  arrow: "Drag to draw an arrow",
+  rect: "Drag to draw a box",
+  mark: "Drag over text to highlight it",
+  text: "Click to add text",
+  step: "Click to add numbered steps (1, 2, 3…)",
 };
 
 let hintHtml: string | null = null;
@@ -376,12 +439,16 @@ async function open(p: OpenPayload) {
     mode = p.mode;
     W = p.width;
     H = p.height;
-    view.width = ui.width = W;
-    view.height = ui.height = H;
+    view.width = ui.width = base.width = W;
+    view.height = ui.height = base.height = H;
     original = new ImageData(new Uint8ClampedArray(await receiveFrame()), W, H);
     vctx.putImageData(original, 0, 0);
+    bctx.putImageData(original, 0, 0);
     sel = null;
     ops = [];
+    notes = [];
+    history = [];
+    picked = -1;
     smart = null;
     tool = "select";
     renderUI();
@@ -403,12 +470,16 @@ function reset() {
   drag = null;
   pendingOp = null;
   smart = null;
+  notes = [];
+  history = [];
+  picked = -1;
+  editing = null;
   closeText();
-  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = true;
+  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = noteInput.hidden = true;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
-  view.width = view.height = ui.width = ui.height = 1;
+  view.width = view.height = ui.width = ui.height = base.width = base.height = 1;
   W = H = 0;
 }
 
@@ -610,9 +681,7 @@ function applySmart() {
   smart = null;
   if (rects.length) {
     // Black box unless the user picked blur/pixelate first: safest for keys and passwords.
-    const op: Op = { tool: tool === "select" ? "box" : tool, rects };
-    ops.push(op);
-    applyOp(op);
+    addRedaction({ tool: isRedact(tool) ? tool : "box", rects });
   }
   updateChrome();
   renderUI();
@@ -624,12 +693,77 @@ function cancelSmart() {
   renderUI();
 }
 
+// ---------------------------------------------------------------- annotations
+
+function newNote(kind: Exclude<NoteKind, "text">, p: Point): Note {
+  if (kind === "arrow") return { kind, color, a: p, b: p };
+  if (kind === "step") return { kind, color, at: p };
+  return { kind, color, r: { x: p.x, y: p.y, w: 0, h: 0 } };
+}
+
+/** Text notes are typed into a real textarea at the click, then drawn into the image. */
+function openNoteInput(at: Point, idx = -1) {
+  const s = scale();
+  const old = notes[idx];
+  if (old) color = old.color;
+  editing = { at, idx };
+  noteInput.value = old?.kind === "text" ? old.text : "";
+  Object.assign(noteInput.style, { left: `${at.x / s}px`, top: `${at.y / s}px`, color, fontSize: `${FONT_PX}px` });
+  noteInput.hidden = false;
+  noteInput.focus();
+  drawNotes(); // hides the note being edited, so it isn't shown twice
+  updateChrome();
+}
+
+function commitNoteInput(keep = true) {
+  if (!editing) return;
+  const { at, idx } = editing;
+  const text = noteInput.value.replace(/\s+$/, "");
+  editing = null;
+  noteInput.hidden = true;
+  const old = notes[idx];
+  const unchanged = old?.kind === "text" ? old.text === text && old.color === color : !text;
+  if (keep && !unchanged) {
+    snapshot();
+    if (!text) notes.splice(idx, 1);
+    else if (idx >= 0) notes[idx] = { kind: "text", color, at, text };
+    else notes.push({ kind: "text", color, at, text });
+    picked = -1;
+  }
+  drawNotes();
+  updateChrome();
+  renderUI();
+}
+
+function cycleColor() {
+  color = COLORS[(COLORS.indexOf(color) + 1) % COLORS.length];
+  if (editing) noteInput.style.color = color;
+  else if (notes[picked]) {
+    snapshot();
+    notes[picked] = { ...notes[picked], color };
+    drawNotes();
+  }
+  updateChrome();
+}
+
+function deletePicked() {
+  if (!notes[picked]) return;
+  snapshot();
+  notes.splice(picked, 1);
+  picked = -1;
+  drawNotes();
+  updateChrome();
+  renderUI();
+}
+
 // ---------------------------------------------------------------- input
 
 function setTool(t: Tool) {
   tool = t;
-  if (t !== "select") closeText(); // the Live Text layer would catch the redaction drag
+  picked = -1;
+  if (t !== "select") closeText(); // the Live Text layer would catch the drag
   updateChrome();
+  renderUI();
 }
 
 ui.addEventListener("mousedown", (e) => {
@@ -641,21 +775,47 @@ ui.addEventListener("mousedown", (e) => {
     renderUI();
     return;
   }
+  if (editing) return void commitNoteInput(); // a click away finishes the text
   const editable = mode === "capture" && sel;
-  if (editable && tool !== "select" && inside(p, sel!)) {
+  const hit = editable && tool === "select" ? noteAt(vctx, notes, p, scale()) : -1;
+  if (editable && isNote(tool) && inside(p, sel!)) {
+    picked = -1;
+    if (tool === "text") {
+      e.preventDefault(); // keep focus in the textarea we're about to show
+      return openNoteInput(p);
+    }
+    snapshot();
+    notes.push(newNote(tool, p));
+    drawNotes();
+    if (tool !== "step") drag = { kind: "note", origin: p };
+  } else if (editable && isRedact(tool) && inside(p, sel!)) {
     drag = { kind: "op", origin: p };
     pendingOp = { x: p.x, y: p.y, w: 0, h: 0 };
   } else if (editable && tool === "select" && handleAt(p, sel!)) {
     drag = { kind: "resize", origin: p, start: { ...sel! }, handle: handleAt(p, sel!)! };
+  } else if (hit >= 0) {
+    picked = hit;
+    color = notes[hit].color;
+    snapshot(); // dropped on mouseup if it didn't actually move
+    drag = { kind: "notemove", origin: p, start: notes[hit] };
   } else if (editable && tool === "select" && inside(p, sel!)) {
+    picked = -1;
     drag = { kind: "move", origin: p, start: { ...sel! } };
   } else {
+    picked = -1;
     drag = { kind: "new", origin: p };
     sel = { x: p.x, y: p.y, w: 0, h: 0 };
     closeText();
   }
   updateChrome();
   renderUI();
+});
+
+ui.addEventListener("dblclick", (e) => {
+  if (mode !== "capture" || tool !== "select") return;
+  const i = noteAt(vctx, notes, toPhys(e), scale());
+  const n = notes[i];
+  if (n?.kind === "text") openNoteInput(n.at, i);
 });
 
 window.addEventListener("mousemove", (e) => {
@@ -666,7 +826,9 @@ window.addEventListener("mousemove", (e) => {
       cursor = overWord(p) ? "pointer" : "default";
     } else if (mode === "capture" && sel && tool === "select") {
       const h = handleAt(p, sel);
-      cursor = h ? CURSORS[h] : inside(p, sel) ? "move" : "crosshair";
+      cursor = h ? CURSORS[h] : inside(p, sel) || noteAt(vctx, notes, p, scale()) >= 0 ? "move" : "crosshair";
+    } else if (tool === "text" && sel && inside(p, sel)) {
+      cursor = "text";
     }
     ui.style.cursor = cursor;
     return;
@@ -692,6 +854,15 @@ window.addEventListener("mousemove", (e) => {
     sel = rectFrom({ x: x0, y: y0 }, { x: x1, y: y1 });
   } else if (drag.kind === "op" && sel) {
     pendingOp = clampTo(rectFrom(drag.origin, p), sel);
+  } else if (drag.kind === "note" && sel) {
+    const n = notes[notes.length - 1];
+    const q = { x: Math.max(sel.x, Math.min(sel.x + sel.w, p.x)), y: Math.max(sel.y, Math.min(sel.y + sel.h, p.y)) };
+    if (n.kind === "arrow") n.b = q;
+    else if (n.kind === "rect" || n.kind === "mark") n.r = rectFrom(drag.origin, q);
+    drawNotes();
+  } else if (drag.kind === "notemove") {
+    notes[picked] = moved(drag.start, dx, dy);
+    drawNotes();
   }
   updateChrome();
   renderUI();
@@ -710,14 +881,16 @@ window.addEventListener("mouseup", () => {
       return;
     }
   }
-  if (d.kind === "op" && pendingOp && tool !== "select") {
-    if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) {
-      const op: Op = { tool, rects: [pendingOp] };
-      ops.push(op);
-      applyOp(op);
-    }
+  if (d.kind === "op" && pendingOp && isRedact(tool)) {
+    if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) addRedaction({ tool, rects: [pendingOp] });
     pendingOp = null;
   }
+  if (d.kind === "note" && isTiny(notes[notes.length - 1], scale())) {
+    notes.pop(); // an accidental click with a drag tool
+    history.pop();
+    drawNotes();
+  }
+  if (d.kind === "notemove" && JSON.stringify(notes[picked]) === JSON.stringify(d.start)) history.pop(); // just a click
   updateChrome();
   renderUI();
 });
@@ -729,6 +902,12 @@ window.addEventListener("contextmenu", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (e.target === noteInput) {
+    if (e.key === "Escape") commitNoteInput(false);
+    else if (e.key === "Enter" && !e.shiftKey) commitNoteInput();
+    else return; // typing
+    return void e.preventDefault();
+  }
   if (e.target === textOut && e.key !== "Escape") return; // let the textarea handle typing, Ctrl+C, etc.
   if (smart) {
     if (e.key === "Escape") cancelSmart();
@@ -751,7 +930,12 @@ window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
     if (k === "enter") return finish("both"), true;
-    const tools: Record<string, Tool> = { v: "select", b: "blur", p: "pixelate", r: "box" };
+    if ((k === "delete" || k === "backspace") && notes[picked]) return deletePicked(), true;
+    if (k === "c") return cycleColor(), true;
+    const tools: Record<string, Tool> = {
+      v: "select", b: "blur", p: "pixelate", r: "box",
+      a: "arrow", o: "rect", h: "mark", w: "text", n: "step",
+    };
     if (tools[k]) return setTool(tools[k]), true;
     if (k === "t") return extractText(), true;
     if (k === "s") return startSmart(), true;
@@ -768,6 +952,7 @@ toolbar.addEventListener("click", (e) => {
     case "undo": return undo();
     case "ocr": return void extractText();
     case "smart": return void startSmart();
+    case "color": return cycleColor();
     case "copy":
     case "save":
     case "both":
@@ -792,6 +977,8 @@ toolbar.addEventListener("mousedown", (e) => {
 });
 panel.addEventListener("mousedown", (e) => e.stopPropagation());
 smartbar.addEventListener("mousedown", (e) => e.stopPropagation());
+noteInput.addEventListener("mousedown", (e) => e.stopPropagation());
+noteInput.addEventListener("blur", () => commitNoteInput()); // e.g. clicking Copy while typing
 $("smart-cancel").addEventListener("click", cancelSmart);
 smartApply.addEventListener("click", applySmart);
 
