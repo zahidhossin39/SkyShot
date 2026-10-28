@@ -17,7 +17,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             hotkey_capture: "Ctrl+PrintScreen".into(),
-            hotkey_text: "Shift+PrintScreen".into(),
+            // Not Shift+PrtSc: Lightshot owns it, so it fails to register while Lightshot runs.
+            hotkey_text: "Ctrl+Shift+PrintScreen".into(),
             save_dir: String::new(),
         }
     }

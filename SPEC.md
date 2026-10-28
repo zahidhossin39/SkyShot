@@ -44,7 +44,7 @@ If a decision changes, update this file in the same commit.
 - All defaults are **2-key** and **fully rebindable in settings (v1)**.
 - Windows defaults:
   - `Ctrl+PrtSc`: region capture
-  - `Shift+PrtSc`: instant text grab (drag region → text to clipboard, no image)
+  - `Ctrl+Shift+PrtSc`: instant text grab (drag region → text to clipboard, no image). This is the one 3-key default, because every free 2-key PrtSc combo is taken: Lightshot owns PrtSc and Shift+PrtSc, Windows owns Alt and Win+PrtSc, and capture uses Ctrl+PrtSc. "Add Shift for text" is easy to remember.
 - Leave Windows' own `PrtSc`, `Win+PrtSc`, `Alt+PrtSc` alone.
 - Settings must **warn when a combo is already taken**. Windows `RegisterHotKey` fails if another app owns it, so it can be detected.
 - Each OS gets its own defaults. Mac later: `Cmd+Shift+3/4/5` are reserved by the OS, so use something like `Option+S` / `Option+T`.
@@ -76,7 +76,7 @@ If a decision changes, update this file in the same commit.
 | Mode | What it does | Version |
 |---|---|---|
 | Copy-all | Click OCR → popup with all text, editable → copy | v1 |
-| Instant text hotkey | `Shift+PrtSc` → drag → text straight to clipboard, no image | v1 |
+| Instant text hotkey | `Ctrl+Shift+PrtSc` → drag → text straight to clipboard, no image | v1 |
 | Live Text | Text in the captured image becomes selectable like a web page; highlight words and copy | v2 |
 | Smart actions | Detect links / emails / phones / code → one click opens a URL, copies code as a block, etc. | v2 |
 
@@ -144,7 +144,7 @@ If a decision changes, update this file in the same commit.
   - Timing (dev build): 7–34 ms for typical selections. The worst case is a 1200×800 area of small text at ~430 ms, which used to take ~4 s.
   - The dev profile builds our own crate with `opt-level = 1`, because generic image code compiled unoptimized was ~20× slower.
 - **Overlay speed (debug build, 1 monitor, warm hidden window):** hotkey→visible is **95–111 ms** when the machine is idle and ~170–200 ms under load. Sending the 8 MB frame through Tauri IPC took 88–124 ms. The fix is to post it as WebView2 shared memory (`PostSharedBufferToScript`), which takes 14–35 ms. Fast PNG was tried and was slower: encoding plus decoding cost more than the transfer it saved.
-- **Hotkey conflict:** running Lightshot owns `Shift+PrtSc`. Kept it as the default anyway, since Lightshot is being replaced. Settings shows "Not active" until Lightshot is closed.
+- **Hotkey conflict:** running Lightshot owns `Shift+PrtSc`. That left the text grab dead, so the default moved to `Ctrl+Shift+PrtSc`.
 - v1 selection is per monitor; it can't span monitors.
 - CLI flags `--capture` / `--text` / `--close` trigger or end a capture through the running instance, which is handy for testing and shortcuts.
 
