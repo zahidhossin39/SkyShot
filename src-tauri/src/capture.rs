@@ -1,0 +1,175 @@
+//! Capture flow: hotkey -> grab every monitor -> show one overlay window per monitor.
+//!
+//! Overlay windows are created once and kept hidden ("warm"), so a capture only has to
+//! grab pixels and hand them over. That's what keeps hotkey -> visible fast.
+
+use crate::{
+    state::{AppState, Frame, Session},
+    Mode,
+};
+use serde::Serialize;
+use std::time::Instant;
+use tauri::{
+    AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
+    WebviewWindow, WebviewWindowBuilder, window::Color,
+};
+
+const PREFIX: &str = "overlay-";
+
+#[derive(Clone, Serialize)]
+pub struct OpenPayload {
+    pub mode: Mode,
+    pub width: u32,
+    pub height: u32,
+}
+
+fn overlay_windows(app: &AppHandle) -> Vec<WebviewWindow> {
+    app.webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with(PREFIX))
+        .map(|(_, w)| w)
+        .collect()
+}
+
+fn get_or_create(app: &AppHandle, label: &str) -> Result<WebviewWindow, String> {
+    if let Some(w) = app.get_webview_window(label) {
+        return Ok(w);
+    }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App("overlay.html".into()))
+        .title("Screenshot overlay")
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .visible(false)
+        .focused(false)
+        .background_color(Color(0, 0, 0, 255))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Create one hidden overlay per monitor at startup so the first capture is fast too.
+pub fn warm_up(app: &AppHandle) {
+    let count = xcap::Monitor::all().map(|m| m.len()).unwrap_or(1);
+    for i in 0..count {
+        if let Err(e) = get_or_create(app, &format!("{PREFIX}{i}")) {
+            eprintln!("[capture] warm-up failed: {e}");
+        }
+    }
+}
+
+pub fn start(app: &AppHandle, mode: Mode) {
+    let state = app.state::<AppState>();
+    {
+        let mut session = state.session.lock().unwrap();
+        if session.is_some() {
+            return; // already capturing
+        }
+        *session = Some(Session { mode, started: Instant::now() });
+    }
+    // Capture off the main thread so the event loop stays responsive.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = open(&app, mode) {
+            eprintln!("[capture] failed: {e}");
+            close(&app);
+        }
+    });
+}
+
+fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let t0 = Instant::now();
+    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
+    let mut shots = Vec::with_capacity(monitors.len());
+    for m in &monitors {
+        let x = m.x().map_err(|e| e.to_string())?;
+        let y = m.y().map_err(|e| e.to_string())?;
+        let img = m.capture_image().map_err(|e| e.to_string())?;
+        shots.push((x, y, img));
+    }
+    let capture_ms = t0.elapsed().as_millis();
+
+    for (i, (x, y, img)) in shots.into_iter().enumerate() {
+        let label = format!("{PREFIX}{i}");
+        let win = get_or_create(app, &label)?;
+        let (width, height) = img.dimensions();
+        // Position first: moving to another monitor can change the scale factor.
+        let _ = win.set_position(PhysicalPosition::new(x, y));
+        let _ = win.set_size(PhysicalSize::new(width, height));
+        state.frames.lock().unwrap().insert(
+            label.clone(),
+            Frame { width, height, rgba: img.into_raw() },
+        );
+        app.emit_to(
+            EventTarget::webview_window(&label),
+            "overlay:open",
+            OpenPayload { mode, width, height },
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    // Hide overlays for monitors that were unplugged since last time.
+    for w in overlay_windows(app) {
+        let idx: usize = w.label()[PREFIX.len()..].parse().unwrap_or(usize::MAX);
+        if idx >= monitors.len() {
+            let _ = w.hide();
+        }
+    }
+    println!("[capture] grabbed {} monitor(s) in {capture_ms} ms", monitors.len());
+    Ok(())
+}
+
+/// Overlay asks on load whether a frame is already waiting (covers a window that was
+/// created after the open event fired).
+pub fn pending(app: &AppHandle, label: &str) -> Option<OpenPayload> {
+    let state = app.state::<AppState>();
+    let mode = state.session.lock().unwrap().as_ref()?.mode;
+    let frames = state.frames.lock().unwrap();
+    let f = frames.get(label)?;
+    Some(OpenPayload { mode, width: f.width, height: f.height })
+}
+
+pub fn take_frame(app: &AppHandle, label: &str) -> Option<Frame> {
+    app.state::<AppState>().frames.lock().unwrap().remove(label)
+}
+
+/// Overlay has drawn its frame: show it. Focus goes to the monitor under the cursor.
+pub fn shown(app: &AppHandle, win: &WebviewWindow) -> u128 {
+    let _ = win.show();
+    let under_cursor = (|| {
+        let c = app.cursor_position().ok()?;
+        let p = win.outer_position().ok()?;
+        let s = win.outer_size().ok()?;
+        Some(
+            c.x >= p.x as f64
+                && c.x < (p.x + s.width as i32) as f64
+                && c.y >= p.y as f64
+                && c.y < (p.y + s.height as i32) as f64,
+        )
+    })()
+    .unwrap_or(true);
+    if under_cursor {
+        let _ = win.set_focus();
+    }
+    let ms = app
+        .state::<AppState>()
+        .session
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|s| s.started.elapsed().as_millis())
+        .unwrap_or(0);
+    println!("[capture] {} visible {ms} ms after hotkey", win.label());
+    ms
+}
+
+pub fn close(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    *state.session.lock().unwrap() = None;
+    state.frames.lock().unwrap().clear();
+    for w in overlay_windows(app) {
+        let _ = app.emit_to(EventTarget::webview_window(w.label()), "overlay:reset", ());
+        let _ = w.hide();
+    }
+}
