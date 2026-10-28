@@ -116,7 +116,11 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
             let _ = w.hide();
         }
     }
-    println!("[capture] grabbed {} monitor(s) in {capture_ms} ms", monitors.len());
+    println!(
+        "[capture] grabbed {} monitor(s) in {capture_ms} ms, events sent at {} ms",
+        monitors.len(),
+        since_hotkey(app)
+    );
     Ok(())
 }
 
@@ -132,6 +136,31 @@ pub fn pending(app: &AppHandle, label: &str) -> Option<OpenPayload> {
 
 pub fn take_frame(app: &AppHandle, label: &str) -> Option<Frame> {
     app.state::<AppState>().frames.lock().unwrap().remove(label)
+}
+
+/// Hand raw RGBA to the page through WebView2 shared memory. Pushing 8+ MB through
+/// Tauri IPC costs ~100 ms; this is one memcpy. The page gets a `sharedbufferreceived` event.
+#[cfg(windows)]
+pub fn post_frame(wv: &tauri::webview::PlatformWebview, rgba: &[u8]) -> Result<(), String> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2Environment12, ICoreWebView2_17, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
+    };
+    use windows::core::{Interface, PCWSTR};
+    let err = |e: windows::core::Error| e.to_string();    unsafe {
+        let env: ICoreWebView2Environment12 = wv.environment().cast().map_err(err)?;
+        let core: ICoreWebView2_17 = wv.controller().CoreWebView2().map_err(err)?.cast().map_err(err)?;
+        let buf = env.CreateSharedBuffer(rgba.len() as u64).map_err(err)?;
+        let mut ptr = std::ptr::null_mut();
+        buf.Buffer(&mut ptr).map_err(err)?;
+        std::ptr::copy_nonoverlapping(rgba.as_ptr(), ptr, rgba.len());
+        core.PostSharedBufferToScript(&buf, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY, PCWSTR::null())
+            .map_err(err)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn post_frame(_wv: &tauri::webview::PlatformWebview, _rgba: &[u8]) -> Result<(), String> {
+    Err("shared-buffer frames are Windows-only for now".into())
 }
 
 /// Overlay has drawn its frame: show it. Focus goes to the monitor under the cursor.
@@ -152,16 +181,20 @@ pub fn shown(app: &AppHandle, win: &WebviewWindow) -> u128 {
     if under_cursor {
         let _ = win.set_focus();
     }
-    let ms = app
-        .state::<AppState>()
+    let ms = since_hotkey(app);
+    println!("[capture] {} visible {ms} ms after hotkey", win.label());
+    ms
+}
+
+/// Milliseconds since the hotkey that started the current session (0 if none).
+pub fn since_hotkey(app: &AppHandle) -> u128 {
+    app.state::<AppState>()
         .session
         .lock()
         .unwrap()
         .as_ref()
         .map(|s| s.started.elapsed().as_millis())
-        .unwrap_or(0);
-    println!("[capture] {} visible {ms} ms after hotkey", win.label());
-    ms
+        .unwrap_or(0)
 }
 
 pub fn close(app: &AppHandle) {

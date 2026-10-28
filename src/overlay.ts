@@ -261,6 +261,27 @@ function placePanel() {
 
 // ---------------------------------------------------------------- open / close
 
+const webview = (window as unknown as { chrome: { webview: EventTarget & { releaseBuffer(b: ArrayBuffer): void } } })
+  .chrome.webview;
+
+/** Rust posts the frame as WebView2 shared memory (zero-copy). Copy it out and release it. */
+async function receiveFrame(): Promise<ArrayBuffer> {
+  const got = new Promise<ArrayBuffer>((resolve) =>
+    webview.addEventListener(
+      "sharedbufferreceived",
+      (e) => {
+        const shared = (e as Event & { getBuffer(): ArrayBuffer }).getBuffer();
+        const copy = shared.slice(0); // the shared one is read-only and must be released
+        webview.releaseBuffer(shared);
+        resolve(copy);
+      },
+      { once: true },
+    ),
+  );
+  await invoke("overlay_frame");
+  return got;
+}
+
 async function open(p: OpenPayload) {
   if (opened) return;
   opened = true;
@@ -270,8 +291,7 @@ async function open(p: OpenPayload) {
     H = p.height;
     view.width = ui.width = W;
     view.height = ui.height = H;
-    const buf = await invoke<ArrayBuffer>("overlay_frame");
-    original = new ImageData(new Uint8ClampedArray(buf), W, H);
+    original = new ImageData(new Uint8ClampedArray(await receiveFrame()), W, H);
     vctx.putImageData(original, 0, 0);
     sel = null;
     ops = [];

@@ -42,6 +42,8 @@ windows = { version = "0.62", features = [
   "Storage_Streams",
   "Win32_System_WinRT",
 ] }
+# Same version Tauri uses; needed to post frames to the overlay via shared memory.
+webview2-com = "0.39"
 
 
 # Optimize dependencies even in dev builds: screen capture and image conversion are

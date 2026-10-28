@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use state::AppState;
 use std::sync::{atomic::Ordering, Mutex};
 use tauri::{
-    ipc::{InvokeBody, Request, Response},
+    ipc::{InvokeBody, Request},
     AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -68,10 +68,16 @@ fn overlay_pending(app: AppHandle, window: WebviewWindow) -> Option<capture::Ope
 }
 
 #[tauri::command]
-fn overlay_frame(app: AppHandle, window: WebviewWindow) -> Result<Response, String> {
-    capture::take_frame(&app, window.label())
-        .map(|f| Response::new(f.rgba))
-        .ok_or_else(|| "no frame".into())
+async fn overlay_frame(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    let frame = capture::take_frame(&app, window.label()).ok_or("no frame")?;
+    // Async command, so waiting here doesn't block the main thread `with_webview` runs on.
+    let (tx, rx) = std::sync::mpsc::channel();
+    window
+        .with_webview(move |wv| {
+            let _ = tx.send(capture::post_frame(&wv, &frame.rgba));
+        })
+        .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -245,12 +251,14 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<SettingsView, String> 
 pub fn run() {
     tauri::Builder::default()
         // Must be first: a second launch forwards its args here instead of starting again.
-        // `--capture` / `--text` let other tools (or tests) trigger a capture.
+        // `--capture` / `--text` let other tools (or tests) trigger a capture; `--close` ends it.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if argv.iter().any(|a| a == "--capture") {
                 capture::start(app, Mode::Capture);
             } else if argv.iter().any(|a| a == "--text") {
                 capture::start(app, Mode::Text);
+            } else if argv.iter().any(|a| a == "--close") {
+                capture::close(app);
             } else {
                 open_settings(app);
             }

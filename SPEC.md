@@ -138,10 +138,10 @@ If a decision changes, update this file in the same commit.
 ### Spike results (2026-10-28)
 
 - **OCR:** Windows OCR in Rust gets ~100% on prose, UI text, URLs, and keys in 6–23 ms. Code is decent. Small text needs upscaling. Rule: run once at native size. If the median word height is under 16 px, re-run at 2×. Upscaling everything hurt normal text, so the threshold stays.
-- **Overlay speed (debug build, 1 monitor, warm hidden window):** capture 56 ms, hotkey→visible 268 ms. Still over 200 ms. The rest is the frame transfer to the webview plus the canvas paint. Next: measure a release build, then cut the transfer cost if needed.
+- **Overlay speed (debug build, 1 monitor, warm hidden window):** hotkey→visible is **95–111 ms** when the machine is idle and ~170–200 ms under load. Sending the 8 MB frame through Tauri IPC took 88–124 ms. The fix is to post it as WebView2 shared memory (`PostSharedBufferToScript`), which takes 14–35 ms. Fast PNG was tried and was slower: encoding plus decoding cost more than the transfer it saved.
 - **Hotkey conflict:** running Lightshot owns `Shift+PrtSc`. Kept it as the default anyway, since Lightshot is being replaced. Settings shows "Not active" until Lightshot is closed.
 - v1 selection is per monitor; it can't span monitors.
-- CLI flags `--capture` / `--text` trigger a capture through the running instance, which is handy for testing and shortcuts.
+- CLI flags `--capture` / `--text` / `--close` trigger or end a capture through the running instance, which is handy for testing and shortcuts.
 
 ## 10. Not doing (and why)
 
