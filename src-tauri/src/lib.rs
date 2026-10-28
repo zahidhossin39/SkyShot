@@ -103,6 +103,37 @@ fn copy_text(text: String) -> Result<(), String> {
     output::copy_text(&text)
 }
 
+/// Smart action: open a link found by OCR in the default browser. The text came from a
+/// screenshot and could be anything, so only http(s) links, passed as an argument (no shell).
+#[tauri::command]
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !is_web_link(&url) {
+        return Err("Not a web link".into());
+    }
+    capture::close(&app); // the overlay is always on top and would hide the browser
+    std::process::Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", &url])
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+fn is_web_link(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    (lower.starts_with("https://") || lower.starts_with("http://"))
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
+}
+
+#[cfg(test)]
+#[test]
+fn only_web_links_open() {
+    assert!(is_web_link("https://tauri.app/start"));
+    assert!(is_web_link("HTTP://example.com/a?b=1"));
+    for bad in ["file:///C:/Windows/System32/calc.exe", "javascript:alert(1)", "ms-settings:", "https://a.io\" & calc", "https://a b"] {
+        assert!(!is_web_link(bad), "{bad}");
+    }
+}
+
 /// Instant text grab: close overlay right away, then OCR and copy.
 #[tauri::command]
 async fn grab_text(app: AppHandle, request: Request<'_>) -> Result<(), String> {
@@ -301,6 +332,7 @@ pub fn run() {
             overlay_close,
             ocr_image,
             copy_text,
+            open_url,
             grab_text,
             finish,
             get_settings,

@@ -63,7 +63,7 @@ If a decision changes, update this file in the same commit.
 - **Click any word** to redact just that word.
 - Not fully automatic. Why: auto-hiding can remove things you meant to show, and you may not notice.
 - **Built (experiment/v2 branch):** toolbar shield button or `S`. Red dashed boxes = will be hidden; click a box to keep it, click any other word to add it; `Enter` redact, `Esc` back. Uses Black box unless Blur/Pixelate is the active tool. The whole batch is one undo step.
-- Detection is regex on each OCR line (`src/sensitive.ts`, tests in `sensitive.test.ts`, run `npm test`): email, IPv4 (port included), card (Luhn check), phone (9–15 digits, 8 if it starts with `+`), key/token (any 20+ char letters+digits token, plus an `sk-`/`ghp_`-style prefix word because OCR splits it). Known false positive: a plain 10-digit number reads as a phone. Accepted since every box is reviewed.
+- Detection is regex on each OCR line (`src/detect.ts`, tests in `detect.test.ts`, run `npm test`): email, IPv4 (port included), card (Luhn check), phone (9–15 digits, 8 if it starts with `+`), key/token (any 20+ char letters+digits token, plus an `sk-`/`ghp_`-style prefix word because OCR splits it). Known false positive: a plain 10-digit number reads as a phone. Accepted since every box is reviewed.
 
 ## 5. Feature: Text extraction (OCR)
 
@@ -81,6 +81,11 @@ If a decision changes, update this file in the same commit.
 | Instant text hotkey | `Ctrl+Shift+PrtSc` → drag → text straight to clipboard, no image | v1 |
 | Live Text | Text in the captured image becomes selectable like a web page; highlight words and copy | v2 |
 | Smart actions | Detect links / emails / phones / code → one click opens a URL, copies code as a block, etc. | v2 |
+
+**Built (experiment/v2):** Live Text and Smart actions both hang off the **Text** button (`T`). One OCR pass fills the panel, the live layer and the chips.
+- Live Text: invisible OCR words laid over the selection (like a PDF text layer). Drag to highlight, `Ctrl+C` copies the selected words (whole words, one line per OCR line) instead of the image. `Esc` closes the panel and the layer. Picking a redaction tool also closes it, since the layer would catch the drag.
+- Smart actions: up to 3 chips in the panel: "Open <link>", "Copy <email>", "Copy <phone>". Links open in the default browser and close the overlay. Rust only opens `http(s)://` links with no spaces or quotes (`is_web_link`), because the text comes from a screenshot.
+- Not done: "copy code as a block". The panel's Copy all already keeps line breaks.
 
 ## 6. Other features
 

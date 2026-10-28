@@ -265,7 +265,52 @@ button svg .faint {
 }
 
 .panel-foot {
-  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Smart actions: links, emails, phones found in the text. */
+#text-actions {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+button.chip {
+  min-width: 0;
+  max-width: 150px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--bar-line);
+  border-radius: 999px;
+  color: #9cc3ff;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* ---------------------------------------------------------------- live text */
+
+/* Invisible words over the image: only the selection highlight shows. */
+#livetext {
+  position: fixed;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#livetext span {
+  position: absolute;
+  color: transparent;
+  line-height: 1;
+  white-space: pre;
+  transform-origin: 0 0;
+  font-family: "Segoe UI", sans-serif;
+}
+
+#livetext ::selection {
+  background: rgba(59, 130, 246, 0.4);
 }
 
 #text-status {

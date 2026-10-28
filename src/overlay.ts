@@ -6,7 +6,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { findSensitive, type Word } from "./sensitive";
+import { findActions, findSensitive, type Action, type Word } from "./detect";
 
 type Mode = "capture" | "text";
 type Tool = "select" | "blur" | "pixelate" | "box";
@@ -39,6 +39,8 @@ const toolbar = $("toolbar");
 const panel = $("textpanel");
 const textOut = $<HTMLTextAreaElement>("text-out");
 const textStatus = $("text-status");
+const liveLayer = $("livetext");
+const textActions = $("text-actions");
 const smartbar = $("smartbar");
 const smartStatus = $("smart-status");
 const smartApply = $<HTMLButtonElement>("smart-apply");
@@ -57,6 +59,8 @@ let ops: Op[] = [];
 let drag: Drag | null = null;
 let pendingOp: Rect | null = null;
 let smart: Smart | null = null;
+/** Live Text words, per OCR line, while the text panel is open. */
+let live: { el: HTMLElement; text: string }[][] | null = null;
 
 /** Physical pixels per CSS pixel. */
 const scale = () => (W ? W / window.innerWidth : window.devicePixelRatio);
@@ -230,6 +234,8 @@ function updateChrome() {
   setHint(
     smart
       ? `Click a box to keep it visible${SEP}Click any word to hide it${SEP}<kbd>Enter</kbd> redact${SEP}<kbd>Esc</kbd> back`
+      : live
+      ? `Drag over the image to select text${SEP}<kbd>Ctrl+C</kbd> copy${SEP}<kbd>Esc</kbd> close`
       : !sel
       ?`${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
       : has && mode === "capture" && tool !== "select"
@@ -397,7 +403,8 @@ function reset() {
   drag = null;
   pendingOp = null;
   smart = null;
-  toolbar.hidden = smartbar.hidden = panel.hidden = sizeLabel.hidden = true;
+  closeText();
+  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = true;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
@@ -441,20 +448,27 @@ async function grabText() {
   }
 }
 
+/** Text panel + Live Text + Smart actions, all from one OCR pass. */
 async function extractText() {
   if (!sel || busy) return;
+  const r = sel;
+  closeText();
+  tool = "select"; // Live Text needs the mouse; redaction tools would fight it
   panel.hidden = false;
   panel.classList.add("loading");
   textStatus.textContent = "Reading text…";
   textOut.value = "";
-  placePanel();
+  updateChrome();
   const { bytes, headers } = cropSelection();
   try {
-    const { text } = await invoke<{ text: string }>("ocr_image", bytes, { headers });
+    const { text, lines } = await invoke<{ text: string; lines: Word[][] }>("ocr_image", bytes, { headers });
+    if (panel.hidden || sel !== r) return; // closed or reselected meanwhile
     textOut.value = text;
     const words = text.split(/\s+/).filter(Boolean).length;
     textStatus.textContent = text.trim() ? `${words} words found — fix anything, then copy` : "No text found in this area";
-    textOut.focus();
+    renderActions(findActions(text));
+    showLive(lines, r);
+    updateChrome();
   } catch (e) {
     textStatus.textContent = String(e);
   } finally {
@@ -462,14 +476,81 @@ async function extractText() {
   }
 }
 
-async function copyText() {
+function closeText() {
+  panel.hidden = true;
+  textActions.replaceChildren();
+  live = null;
+  liveLayer.hidden = true;
+  liveLayer.replaceChildren();
+  getSelection()?.removeAllRanges();
+}
+
+async function copyValue(text: string) {
   try {
-    await invoke("copy_text", { text: textOut.value });
+    await invoke("copy_text", { text });
     textStatus.textContent = "Copied ✓";
   } catch (e) {
     textStatus.textContent = String(e);
   }
 }
+
+const ACTION_VERB: Record<Action["kind"], string> = { url: "Open", email: "Copy", phone: "Copy" };
+
+/** Smart actions: one-click chips for links, emails and phone numbers found in the text. */
+function renderActions(actions: Action[]) {
+  textActions.replaceChildren(
+    ...actions.slice(0, 3).map((a) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.title = a.value;
+      b.textContent = `${ACTION_VERB[a.kind]} ${a.value.replace(/^https?:\/\//i, "")}`;
+      b.onclick = () =>
+        a.kind === "url"
+          ? invoke("open_url", { url: a.value }).catch((e) => (textStatus.textContent = String(e)))
+          : copyValue(a.value);
+      return b;
+    }),
+  );
+}
+
+// ---------------------------------------------------------------- live text
+
+/** Invisible, selectable copy of the OCR words laid over the image (like a PDF text layer). */
+function showLive(lines: Word[][], r: Rect) {
+  const s = scale();
+  Object.assign(liveLayer.style, { left: `${r.x / s}px`, top: `${r.y / s}px`, width: `${r.w / s}px`, height: `${r.h / s}px` });
+  const boxes: number[] = [];
+  live = lines.map((line) =>
+    line.map((w) => {
+      const el = document.createElement("span");
+      el.textContent = w.text;
+      Object.assign(el.style, { left: `${w.x / s}px`, top: `${w.y / s}px`, fontSize: `${w.h / s}px` });
+      liveLayer.append(el);
+      boxes.push(w.w / s);
+      return { el, text: w.text };
+    }),
+  );
+  liveLayer.hidden = false;
+  // Stretch each word to its box so the highlight sits on the image's text. Read all widths
+  // first, then write, so layout runs once.
+  const els = live.flat().map((x) => x.el);
+  const widths = els.map((el) => el.offsetWidth);
+  els.forEach((el, i) => (el.style.transform = `scaleX(${widths[i] ? boxes[i] / widths[i] : 1})`));
+}
+
+// The layer's spans are positioned, so the browser's own copy would come out jumbled.
+// Rebuild it from OCR lines instead: whole words, spaces between, one line per row.
+document.addEventListener("copy", (e) => {
+  const s = getSelection();
+  if (!live || !s || s.isCollapsed || e.target === textOut) return;
+  const text = live
+    .map((line) => line.filter((w) => s.containsNode(w.el, true)).map((w) => w.text).join(" "))
+    .filter(Boolean)
+    .join("\n");
+  e.clipboardData?.setData("text/plain", text);
+  e.preventDefault();
+  textStatus.textContent = "Copied ✓";
+});
 
 // ---------------------------------------------------------------- smart redact
 
@@ -492,7 +573,7 @@ async function startSmart() {
   const r = sel;
   const s: Smart = { words: [], picks: [], loading: true };
   smart = s;
-  panel.hidden = true;
+  closeText();
   updateChrome();
   renderUI();
   const { bytes, headers } = cropSelection();
@@ -547,6 +628,7 @@ function cancelSmart() {
 
 function setTool(t: Tool) {
   tool = t;
+  if (t !== "select") closeText(); // the Live Text layer would catch the redaction drag
   updateChrome();
 }
 
@@ -570,7 +652,7 @@ ui.addEventListener("mousedown", (e) => {
   } else {
     drag = { kind: "new", origin: p };
     sel = { x: p.x, y: p.y, w: 0, h: 0 };
-    panel.hidden = true;
+    closeText();
   }
   updateChrome();
   renderUI();
@@ -647,16 +729,15 @@ window.addEventListener("contextmenu", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
-  if (e.target === textOut) {
-    if (e.key === "Escape") {
-      panel.hidden = true;
-      e.preventDefault();
-    }
-    return; // let the textarea handle typing, Ctrl+C, etc.
-  }
+  if (e.target === textOut && e.key !== "Escape") return; // let the textarea handle typing, Ctrl+C, etc.
   if (smart) {
     if (e.key === "Escape") cancelSmart();
     if (e.key === "Enter") applySmart();
+    return void e.preventDefault();
+  }
+  if (e.key === "Escape" && !panel.hidden) {
+    closeText();
+    updateChrome();
     return void e.preventDefault();
   }
   if (e.key === "Escape") return void close();
@@ -665,7 +746,8 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   const handled = (() => {
     if (e.ctrlKey && k === "z") return undo(), true;
-    if (e.ctrlKey && k === "c") return finish("copy"), true;
+    // With Live Text selected, Ctrl+C copies that text (see the copy listener), not the image.
+    if (e.ctrlKey && k === "c") return getSelection()?.isCollapsed === false ? false : (finish("copy"), true);
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
     if (k === "enter") return finish("both"), true;
@@ -713,8 +795,11 @@ smartbar.addEventListener("mousedown", (e) => e.stopPropagation());
 $("smart-cancel").addEventListener("click", cancelSmart);
 smartApply.addEventListener("click", applySmart);
 
-$("text-close").addEventListener("click", () => (panel.hidden = true));
-$("text-copy").addEventListener("click", copyText);
+$("text-close").addEventListener("click", () => {
+  closeText();
+  updateChrome();
+});
+$("text-copy").addEventListener("click", () => copyValue(textOut.value));
 
 // ---------------------------------------------------------------- wiring
 

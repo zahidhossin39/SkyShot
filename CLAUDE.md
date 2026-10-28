@@ -16,7 +16,7 @@ Deferred v1 items:
 - Push to GitHub: needs owner OK + co-author answer.
 - App name undecided. Shortlist (checked, no app found): Stillpane (top pick), Lensnip, Vitrashot, Glimpshot, Snaptic, Scrimshot. Taken: Veilshot, Hushshot, Cloakshot, Bokashi, Frisket (all screenshot-redaction tools), Snapture, Captureist, Pixsnip.
 
-v2 work happens on branch `experiment/v2` (owner's call). Order: Smart Redact (done, needs a hand test in the real overlay) -> Live Text + Smart actions -> annotations.
+v2 work happens on branch `experiment/v2` (owner's call). Order: Smart Redact (done) -> Live Text + Smart actions (done) -> annotations (next). Both done parts are only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser).
 
 ## How things work (non-obvious)
 
@@ -26,6 +26,9 @@ v2 work happens on branch `experiment/v2` (owner's call). Order: Smart Redact (d
 - OCR (`ocr.rs`): native pass + parallel 2x pixel-doubled pass; 2x result used if median word height < 16 px. `ocr_samples` / `ocr_big_selection` tests need `OCR_SAMPLES` env (sample PNGs were in the session scratchpad; regenerate if needed).
 - `ocr_image` returns `{ text, lines }`: `lines` = word boxes per engine line, in the selection's pixels (2x pass already halved back). `ocr_boxes_match_native_pass` checks that and dumps `<sample>.json` for the JS detector.
 - JS unit tests: `npm test` (node's built-in runner, TS run natively; `*.test.ts` is excluded from tsc).
+- Browser mock: `ctrl+c` sent by the pane tool and `execCommand('copy')` don't fire a copy event; test the Live Text copy handler by dispatching a `ClipboardEvent('copy', { clipboardData: new DataTransfer() })`.
+- Computer-use can't grant the dev build (not an installed app), so the real overlay can't be driven by Claude; ask the owner to hand-test.
+- PowerShell `Get-Content -Raw` reads BOM-less UTF-8 as ANSI and mangles `…`/`×`. Use the Edit tool or `[IO.File]` with UTF8Encoding($false).
 - The browser pane throttles when hidden: screenshots can show stale frames. Trust `javascript_tool` state over screenshots there.
 - Overlay CSS has `[hidden] { display:none !important }` — without it `display:flex` elements ignore `hidden`.
 - Toolbar buttons carry `data-name/data-key/data-desc` for the hover tooltip.

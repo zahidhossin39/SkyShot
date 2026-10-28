@@ -1,6 +1,6 @@
-// Smart Redact: find sensitive text in OCR word boxes. Pure, so it's unit-tested
-// (sensitive.test.ts). Matches run on a whole OCR line, because a phone or card
-// number is usually split into several "words".
+// Find things in OCR text: sensitive text for Smart Redact, links/emails/phones for
+// Smart actions. Pure, so it's unit-tested (detect.test.ts). Matches run on a whole
+// OCR line, because a phone or card number is usually split into several "words".
 
 export type Word = { x: number; y: number; w: number; h: number; text: string };
 export type Kind = "email" | "ip" | "card" | "phone" | "key";
@@ -21,11 +21,15 @@ function luhn(m: string) {
 }
 
 // Order matters: a word claimed by an earlier pattern isn't matched again.
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const PHONE = /\+?\(?\d[\d ().-]{6,}\d/g;
+const isPhone = (m: string) => digits(m) >= (m[0] === "+" ? 8 : 9) && digits(m) <= 15;
+
 const PATTERNS: [Kind, RegExp, ((m: string) => boolean)?][] = [
-  ["email", /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g],
+  ["email", EMAIL],
   ["ip", /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, (m) => m.split(".").every((n) => +n <= 255)],
   ["card", /\b\d(?:[ -]?\d){12,18}\b/g, luhn],
-  ["phone", /\+?\(?\d[\d ().-]{6,}\d/g, (m) => digits(m) >= (m[0] === "+" ? 8 : 9) && digits(m) <= 15],
+  ["phone", PHONE, isPhone],
   // shortcut: any long letters+digits token counts as a key/token (sk-..., ghp_..., AKIA..., JWT parts);
   // catches some long identifiers too, which is fine since the user reviews every box.
   // No "/" so URL paths don't match. The optional prefix covers OCR splitting "sk-proj -4fG7...".
@@ -55,4 +59,20 @@ export function findSensitive(lines: Word[][]): Find[] {
     }
   }
   return found;
+}
+
+export type Action = { kind: "url" | "email" | "phone"; value: string };
+
+/** Smart actions: links to open, emails and phone numbers to copy. Deduped, in reading order. */
+export function findActions(text: string): Action[] {
+  const out: Action[] = [];
+  const add = (kind: Action["kind"], value: string) =>
+    out.some((a) => a.value === value) || out.push({ kind, value });
+  // Ends on a letter, digit or "/" so trailing punctuation ("see example.com.") is left out.
+  for (const m of text.matchAll(/\b(?:https?:\/\/|www\.)[^\s<>"']*[\w/]/gi)) {
+    add("url", /^www\./i.test(m[0]) ? `https://${m[0]}` : m[0]);
+  }
+  for (const m of text.matchAll(EMAIL)) add("email", m[0]);
+  for (const m of text.matchAll(PHONE)) if (isPhone(m[0])) add("phone", m[0]);
+  return out;
 }

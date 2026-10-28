@@ -1,7 +1,7 @@
 // Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findSensitive, type Word } from "./sensitive.ts";
+import { findActions, findSensitive, type Word } from "./detect.ts";
 
 /** One OCR line from a sentence: each word 10px wide, laid out left to right. */
 const line = (s: string): Word[] => s.split(" ").map((text, i) => ({ x: i * 10, y: 0, w: 8, h: 10, text }));
@@ -29,6 +29,17 @@ test("ignores look-alikes", () => {
   assert.deepEqual(found("bad ip 999.1.1.1"), []);
   assert.deepEqual(found("not a card 1234 5678 9012 3456"), [], "fails Luhn, and 16 digits is too long for a phone");
   assert.deepEqual(found("a_very_long_identifier_name without digits"), []);
+});
+
+test("smart actions: links, emails, phones", () => {
+  assert.deepEqual(findActions("Docs at https://tauri.app/start. Or www.example.com/a?b=1, mail hi@x.io\nCall +1 (555) 123-4567"), [
+    { kind: "url", value: "https://tauri.app/start" },
+    { kind: "url", value: "https://www.example.com/a?b=1" },
+    { kind: "email", value: "hi@x.io" },
+    { kind: "phone", value: "+1 (555) 123-4567" },
+  ]);
+  assert.deepEqual(findActions("same https://a.io and https://a.io"), [{ kind: "url", value: "https://a.io" }]);
+  assert.deepEqual(findActions("version 1.2.3 on 2026-10-29"), []);
 });
 
 test("a word is only claimed once", () => {
