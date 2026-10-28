@@ -1,0 +1,187 @@
+:root {
+  --accent: #3b82f6;
+  --bar-bg: rgba(24, 24, 27, 0.96);
+  --bar-fg: #e4e4e7;
+  --bar-muted: #a1a1aa;
+  --bar-hover: rgba(255, 255, 255, 0.08);
+  --bar-active: rgba(59, 130, 246, 0.28);
+  --bar-border: rgba(255, 255, 255, 0.1);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+#ui {
+  cursor: crosshair;
+}
+
+#hint {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  border: 1px solid var(--bar-border);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#size {
+  position: fixed;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#toolbar {
+  position: fixed;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bar-bg);
+  border: 1px solid var(--bar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#toolbar .group {
+  display: flex;
+  gap: 2px;
+}
+
+#toolbar .group + .group {
+  padding-left: 4px;
+  border-left: 1px solid var(--bar-border);
+}
+
+button {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bar-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--bar-hover);
+}
+
+button.active {
+  background: var(--bar-active);
+  color: #fff;
+}
+
+button.text {
+  padding: 0 10px;
+  font-weight: 500;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: #2563eb;
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
+button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+button svg .fill {
+  fill: currentColor;
+}
+
+button svg .faint {
+  opacity: 0.35;
+}
+
+#textpanel {
+  position: fixed;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bar-bg);
+  border: 1px solid var(--bar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color: var(--bar-fg);
+}
+
+.panel-head,
+.panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-foot {
+  justify-content: flex-end;
+}
+
+#text-status {
+  color: var(--bar-muted);
+}
+
+#text-out {
+  height: 160px;
+  resize: vertical;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--bar-border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--bar-fg);
+  font: 13px/1.45 "Cascadia Mono", Consolas, monospace;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#text-out:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}

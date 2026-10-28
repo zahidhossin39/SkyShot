@@ -1,0 +1,179 @@
+:root {
+  --bg: #f7f7f8;
+  --card: #ffffff;
+  --fg: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --accent: #3b82f6;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --key-bg: #f4f4f5;
+  color-scheme: light;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181b;
+    --card: #232326;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #34343a;
+    --key-bg: #2e2e33;
+    color-scheme: dark;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 14px 10px;
+}
+
+h2 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  font-weight: 500;
+}
+
+.status,
+.path {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status.ok::before,
+.status.bad::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.status.ok::before {
+  background: var(--ok);
+}
+
+.status.bad {
+  color: var(--warn);
+}
+
+.status.bad::before {
+  background: var(--warn);
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--key-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+.btns {
+  display: flex;
+  gap: 6px;
+}
+
+button.hotkey {
+  min-width: 150px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+}
+
+button.hotkey.recording {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
+
+.error {
+  margin: 4px 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}

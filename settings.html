@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screenshot App — Settings</title>
+    <link rel="stylesheet" href="/src/settings.css" />
+    <script type="module" src="/src/settings.ts" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Screenshot App</h1>
+        <p>Runs in the tray. Press a hotkey any time, or click the tray icon.</p>
+      </header>
+
+      <section>
+        <h2>Hotkeys</h2>
+        <div class="row">
+          <div>
+            <div class="label">Capture region</div>
+            <div class="status" id="capture-status"></div>
+          </div>
+          <button class="hotkey" data-action="capture" title="Click, then press a new key combination"></button>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Grab text</div>
+            <div class="status" id="text-status"></div>
+          </div>
+          <button class="hotkey" data-action="text" title="Click, then press a new key combination"></button>
+        </div>
+        <p class="error" id="hotkey-error" hidden></p>
+        <button class="link" id="reset-hotkeys">Reset to defaults</button>
+      </section>
+
+      <section>
+        <h2>Saving</h2>
+        <div class="row">
+          <div class="grow">
+            <div class="label">Save folder</div>
+            <div class="path" id="save-dir"></div>
+          </div>
+          <div class="btns">
+            <button id="open-dir">Open</button>
+            <button id="change-dir">Change…</button>
+          </div>
+        </div>
+        <button class="link" id="reset-dir" hidden>Use default folder</button>
+      </section>
+
+      <section>
+        <h2>General</h2>
+        <label class="row">
+          <span class="label">Start with Windows</span>
+          <input type="checkbox" id="autostart" />
+        </label>
+      </section>
+    </main>
+  </body>
+</html>
