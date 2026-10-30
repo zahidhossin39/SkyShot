@@ -280,6 +280,31 @@ mod tests {
         assert!(parse_gemini(429, limited).unwrap_err().contains("rate limit"));
     }
 
+    /// Real network round trip with a fake key: proves the Windows HTTP client reaches both APIs
+    /// and that their real "bad key" replies parse. Set AI_NET_TEST=1 to run.
+    #[cfg(windows)]
+    #[test]
+    fn real_https_with_fake_key() {
+        if std::env::var("AI_NET_TEST").is_err() { return; }
+        let px = [255u8; 4 * 4 * 4];
+        for p in PROVIDERS {
+            let err = reread(p, "fake-key-123", &px, 4, 4).unwrap_err();
+            println!("{p}: {err}");
+            assert!(err.contains("API key"), "{p}: {err}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn credential_manager_round_trip() {
+        if std::env::var("AI_NET_TEST").is_err() { return; }
+        save_key("test-provider", "k1").unwrap();
+        save_key("test-provider", "k2").unwrap(); // replaces, doesn't duplicate
+        assert_eq!(key("test-provider").as_deref(), Some("k2"));
+        remove_key("test-provider");
+        assert_eq!(key("test-provider"), None);
+    }
+
     #[test]
     fn key_hint_shows_only_the_end() {
         assert_eq!(hint("sk-ant-api03-secretABCD"), "…ABCD");

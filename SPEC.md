@@ -73,6 +73,10 @@ If a decision changes, update this file in the same commit.
   - **Bring your own API key** (Claude or Gemini) pasted in settings. No server.
   - Only the image the user clicks AI on gets sent.
   - **Scope: better OCR only.** No translate or Q&A for now (easy to add later).
+  - **Built (experiment/v2):** "Re-read with AI" button in the Text panel replaces the panel text with the AI's transcription. Settings → AI re-read: pick Claude or Gemini, paste key; the key is stored in Windows Credential Manager (never in settings.json, never sent to the page, shown as "…ab12").
+  - Claude: Messages API, `claude-opus-5-5`, effort medium, `fallbacks: "default"` (safety decline re-runs on Anthropic's fallback model). Gemini: `v1beta` generateContent, `gemini-2.5-flash` (key in `x-goog-api-key` header). HTTPS via Windows' own `Windows.Web.Http`, no new crate.
+  - The image sent is the cropped, already-redacted selection, so hidden text never leaves the PC.
+  - Tested: request/response parsing unit tests; a real round trip to both APIs with a fake key (gets their "bad key" errors back as plain messages, set `AI_NET_TEST=1`); Credential Manager save/replace/remove. Not tested: a real transcription (needs the owner's key).
 
 ### OCR UX (all four wanted; staged across versions)
 | Mode | What it does | Version |
