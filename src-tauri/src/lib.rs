@@ -5,6 +5,7 @@ mod hotkeys;
 mod ocr;
 mod output;
 mod pin;
+mod scroll;
 mod settings;
 mod state;
 mod tray;
@@ -236,6 +237,49 @@ async fn pin(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Res
     capture::close(&app);
     remember(&app, rgba.clone(), width, height);
     pin::open(&app, &window, state::Frame { width, height, rgba }, x, y)
+}
+
+/// Scrolling capture of the selection (`x, y, w, h` in this overlay's monitor pixels).
+/// The overlay closes so the wheel reaches the real window under it.
+#[tauri::command]
+fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32, h: u32) -> Result<(), String> {
+    let idx: usize = window.label().trim_start_matches("overlay-").parse().map_err(|_| "not an overlay")?;
+    capture::close(&app);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(250)); // let the overlay disappear
+        let back = app.cursor_position().ok();
+        let result = (|| -> Result<image::RgbaImage, String> {
+            let mon = xcap::Monitor::all().map_err(|e| e.to_string())?.into_iter().nth(idx).ok_or("monitor gone")?;
+            let (mx, my) = (mon.x().map_err(|e| e.to_string())?, mon.y().map_err(|e| e.to_string())?);
+            let grab = || {
+                mon.capture_image()
+                    .map(|img| image::imageops::crop_imm(&img, x, y, w, h).to_image())
+                    .map_err(|e| e.to_string())
+            };
+            // One notch is ~100-150 px; keep each step well under the area's height so frames overlap.
+            let notches = (h / 250).clamp(1, 5) as i32;
+            let (cx, cy) = (mx + (x + w / 2) as i32, my + (y + h / 2) as i32);
+            scroll::run(grab, || {
+                scroll::wheel_at(cx, cy, notches);
+                std::thread::sleep(std::time::Duration::from_millis(350)); // smooth scrolling settles
+            })
+        })();
+        if let Some(p) = back {
+            scroll::move_cursor(p.x as i32, p.y as i32);
+        }
+        match result {
+            Ok(img) => {
+                let (iw, ih) = img.dimensions();
+                match output::copy_image(img.as_raw(), iw, ih) {
+                    Ok(()) => output::notify(&app, "Long screenshot copied", &format!("{iw} × {ih}. Also saved to History.")),
+                    Err(e) => output::notify(&app, "Something went wrong", &e),
+                }
+                remember(&app, img.into_raw(), iw, ih);
+            }
+            Err(e) => output::notify(&app, "Scrolling capture failed", &e),
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -501,6 +545,7 @@ pub fn run() {
             finish,
             pin,
             pin_image,
+            scroll_capture,
             pin_copy,
             history_list,
             history_star,

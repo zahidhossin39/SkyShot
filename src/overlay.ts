@@ -538,6 +538,17 @@ async function pin() {
   }
 }
 
+async function scrollCapture() {
+  if (!sel || busy) return;
+  busy = true;
+  try {
+    await invoke("scroll_capture", { x: sel.x, y: sel.y, w: sel.w, h: sel.h });
+  } catch (e) {
+    console.error("[overlay] scroll capture failed", e);
+    busy = false;
+  }
+}
+
 async function grabText() {
   if (!sel || busy) return;
   busy = true;
@@ -1056,6 +1067,7 @@ window.addEventListener("keydown", (e) => {
     if ((k === "delete" || k === "backspace") && notes[picked]) return deletePicked(), true;
     if (k === "c") return cycleColor(), true;
     if (k === "f") return pin(), true;
+    if (k === "l") return scrollCapture(), true;
     const tools: Record<string, Tool> = {
       v: "select", b: "blur", p: "pixelate", r: "box",
       a: "arrow", o: "rect", h: "mark", w: "text", n: "step",
@@ -1078,6 +1090,7 @@ toolbar.addEventListener("click", (e) => {
     case "smart": return void startSmart();
     case "color": return cycleColor();
     case "pin": return void pin();
+    case "scroll": return void scrollCapture();
     case "copy":
     case "save":
     case "both":
