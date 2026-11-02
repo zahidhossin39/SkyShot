@@ -36,6 +36,8 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 - The browser pane throttles when hidden: screenshots can show stale frames. Trust `javascript_tool` state over screenshots there.
 - Overlay CSS has `[hidden] { display:none !important }` — without it `display:flex` elements ignore `hidden`.
 - Toolbar buttons carry `data-name/data-key/data-desc` for the hover tooltip.
+- Dev server port is 1430, not Tauri's default 1420: the owner's Silent Voice project also uses 1420, and both bound it (IPv4 vs IPv6) so pages loaded from the wrong app.
+- Settings and History share `src/theme.css` tokens (light + dark).
 - Dev testing: `screenshot-app.exe --capture | --text | --close` drives the running instance. Logs: `[capture] ... visible N ms`, `[ocr] WxH: N ms`.
 - UI can be checked in a browser via a temp page that mocks `window.__TAURI_INTERNALS__` and `chrome.webview` (fake frame + invoke stubs), served by the Vite dev server on :1420.
 - Dev profile: deps opt-level 3, own crate opt-level 1 (generic image code was ~20x slower unoptimized). Icon changes need `build.rs` touched to re-embed.

@@ -37,7 +37,7 @@ pub fn open_settings(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Screenshot App — Settings")
-        .inner_size(560.0, 720.0)
+        .inner_size(820.0, 600.0)
         .resizable(false)
         .maximizable(false)
         .center()

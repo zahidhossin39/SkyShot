@@ -306,7 +306,7 @@ function updateChrome() {
       : live
       ? `Drag over the image to select text${SEP}<kbd>Ctrl+C</kbd> copy${SEP}<kbd>Esc</kbd> close`
       : !sel
-      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}Click a window to grab it${SEP}<kbd>C</kbd> copy colour${SEP}<kbd>Esc</kbd> cancel`
+      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}Click a window to grab it${SEP}<kbd>Z</kbd> ${loupeOn ? "hide zoom" : "zoom"}${loupeOn ? `${SEP}<kbd>C</kbd> copy colour` : ""}${SEP}<kbd>Esc</kbd> cancel`
       : editing
       ? `Type your text${SEP}<kbd>Enter</kbd> done${SEP}<kbd>Shift+Enter</kbd> new line${SEP}<kbd>Esc</kbd> discard`
       : notes[picked] && tool === "select"
@@ -494,6 +494,7 @@ function reset() {
   hoverWin = null;
   closeText();
   toolbar.hidden = smartbar.hidden = sizeLabel.hidden = noteInput.hidden = loupe.hidden = true;
+  loupeOn = false;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
@@ -825,9 +826,12 @@ function deletePicked() {
 const CELLS = 15; // odd, so one pixel sits in the middle
 
 /** Magnifier + colour readout by the cursor while choosing an area or dragging an edge. */
+let loupeOn = false; // per capture; Z toggles
+
 function updateLoupe(p: Point | null) {
   lastPoint = p;
-  const show = !!p && !!original && !smart && (!sel || drag?.kind === "new" || drag?.kind === "resize");
+  // Off unless asked for (Z): an always-on magnifier got in the way.
+  const show = loupeOn && !!p && !!original && !smart && (!sel || drag?.kind === "new" || drag?.kind === "resize");
   loupe.hidden = !show;
   if (!show || !p || !original) return;
   const s = scale();
@@ -1050,6 +1054,12 @@ window.addEventListener("keydown", (e) => {
     return void e.preventDefault();
   }
   if (e.key === "Escape") return void close();
+  if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.altKey && !e.metaKey && (!sel || drag)) {
+    loupeOn = !loupeOn;
+    updateLoupe(lastPoint);
+    updateChrome();
+    return void e.preventDefault();
+  }
   if (!loupe.hidden && e.key.toLowerCase() === "c" && !e.ctrlKey && !e.altKey && !e.metaKey) {
     copyHex();
     return void e.preventDefault();

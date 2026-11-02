@@ -8,97 +8,187 @@
     <script type="module" src="/src/settings.ts" defer></script>
   </head>
   <body>
-    <main>
-      <header>
-        <h1>Screenshot App</h1>
-        <p>Runs in the tray. Press a hotkey any time, or click the tray icon.</p>
-      </header>
-
-      <section>
-        <h2>Hotkeys</h2>
-        <div class="row">
-          <div>
-            <div class="label">Capture region</div>
-            <div class="status" id="capture-status"></div>
-          </div>
-          <button class="hotkey" data-action="capture" title="Click, then press a new key combination"></button>
+    <aside class="rail">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
+          <rect x="32" y="32" width="960" height="960" rx="224" fill="#2563eb" />
+          <g fill="none" stroke="#fff" stroke-width="92" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M224 408V288a64 64 0 0 1 64-64h120" /><path d="M616 224h120a64 64 0 0 1 64 64v120" />
+            <path d="M800 616v120a64 64 0 0 1-64 64H616" /><path d="M408 800H288a64 64 0 0 1-64-64V616" />
+          </g>
+          <rect x="352" y="428" width="320" height="68" rx="34" fill="#fff" />
+          <rect x="352" y="540" width="216" height="68" rx="14" fill="#0b1220" />
+        </svg>
+        <div>
+          <strong>Screenshot App</strong>
+          <span>Runs in your tray</span>
         </div>
-        <div class="row">
-          <div>
-            <div class="label">Grab text</div>
-            <div class="status" id="text-status"></div>
+      </div>
+
+      <nav aria-label="Settings">
+        <button data-page="shortcuts">
+          <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5" /><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8" /></svg>
+          Shortcuts
+        </button>
+        <button data-page="saving">
+          <svg viewBox="0 0 24 24"><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>
+          Saving
+        </button>
+        <button data-page="history">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5" /><path d="M4 4.5v4h4M12 8v4.5l3 1.8" /></svg>
+          History
+        </button>
+        <button data-page="ai">
+          <svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5 5 1.9-5 1.9-1.9 5-1.9-5-5-1.9 5-1.9z" /><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /></svg>
+          AI re-read
+        </button>
+        <button data-page="general">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" /></svg>
+          General
+        </button>
+      </nav>
+
+      <p class="rail-foot">Version 0.1.0</p>
+    </aside>
+
+    <main>
+      <!-- ---------------------------------------------------------- shortcuts -->
+      <section class="page" data-page="shortcuts">
+        <header>
+          <h1>Shortcuts</h1>
+          <p>Work anywhere in Windows. Click a shortcut, then press the new keys.</p>
+        </header>
+        <div class="group">
+          <div class="row">
+            <div class="row-text">
+              <div class="label">Capture an area</div>
+              <div class="status" id="capture-status"></div>
+            </div>
+            <button class="hotkey" data-action="capture" aria-label="Change the capture shortcut"></button>
           </div>
-          <button class="hotkey" data-action="text" title="Click, then press a new key combination"></button>
+          <div class="row">
+            <div class="row-text">
+              <div class="label">Grab text only</div>
+              <div class="status" id="text-status"></div>
+            </div>
+            <button class="hotkey" data-action="text" aria-label="Change the text grab shortcut"></button>
+          </div>
         </div>
         <p class="error" id="hotkey-error" hidden></p>
         <button class="link" id="reset-hotkeys">Reset to defaults</button>
+
+        <h2>In the capture screen</h2>
+        <dl class="keys">
+          <div><dt><kbd>Z</kbd></dt><dd>Zoom and colour picker</dd></div>
+          <div><dt><kbd>V</kbd></dt><dd>Select, move, edit marks</dd></div>
+          <div><dt><kbd>A</kbd> <kbd>O</kbd> <kbd>H</kbd></dt><dd>Arrow, box, highlighter</dd></div>
+          <div><dt><kbd>W</kbd> <kbd>N</kbd></dt><dd>Text note, numbered steps</dd></div>
+          <div><dt><kbd>B</kbd> <kbd>P</kbd> <kbd>R</kbd></dt><dd>Blur, pixelate, black box</dd></div>
+          <div><dt><kbd>S</kbd></dt><dd>Smart redact</dd></div>
+          <div><dt><kbd>T</kbd></dt><dd>Read the text</dd></div>
+          <div><dt><kbd>F</kbd></dt><dd>Pin on top of the screen</dd></div>
+          <div><dt><kbd>L</kbd></dt><dd>Scrolling capture</dd></div>
+          <div><dt><kbd>Enter</kbd></dt><dd>Copy and save</dd></div>
+        </dl>
       </section>
 
-      <section>
-        <h2>Saving</h2>
-        <div class="row">
-          <div class="grow">
-            <div class="label">Save folder</div>
-            <div class="path" id="save-dir"></div>
-          </div>
-          <div class="btns">
-            <button id="open-dir">Open</button>
-            <button id="change-dir">Change…</button>
+      <!-- ---------------------------------------------------------- saving -->
+      <section class="page" data-page="saving" hidden>
+        <header>
+          <h1>Saving</h1>
+          <p>Where Save and Copy &amp; save put your PNG files.</p>
+        </header>
+        <div class="group">
+          <div class="row">
+            <div class="row-text grow">
+              <div class="label">Save folder</div>
+              <div class="path" id="save-dir"></div>
+            </div>
+            <div class="btns">
+              <button class="btn" id="open-dir">Open</button>
+              <button class="btn" id="change-dir">Change…</button>
+            </div>
           </div>
         </div>
-        <button class="link" id="reset-dir" hidden>Use default folder</button>
+        <button class="link" id="reset-dir" hidden>Use the default folder</button>
       </section>
 
-      <section>
-        <h2>History</h2>
-        <div class="row">
-          <div class="grow">
-            <div class="label">Keep screenshots for</div>
-            <div class="path">Starred shots are always kept. Hidden or redacted text is never stored.</div>
+      <!-- ---------------------------------------------------------- history -->
+      <section class="page" data-page="history" hidden>
+        <header>
+          <h1>History</h1>
+          <p>Every shot you copy, save or pin is kept here, searchable by the text in it.</p>
+        </header>
+        <div class="group">
+          <div class="row">
+            <div class="row-text grow">
+              <div class="label">Keep screenshots for</div>
+              <div class="hint">Starred shots are always kept. Hidden or redacted text is never stored.</div>
+            </div>
+            <select id="history-days">
+              <option value="1">1 day</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">1 year</option>
+              <option value="0">Forever</option>
+            </select>
           </div>
-          <select id="history-days">
-            <option value="1">1 day</option>
-            <option value="7">7 days</option>
-            <option value="30">30 days</option>
-            <option value="90">90 days</option>
-            <option value="365">1 year</option>
-            <option value="0">Forever</option>
-          </select>
+          <div class="row">
+            <div class="row-text grow">
+              <div class="label">Browse and search</div>
+              <div class="hint">Also in the tray menu.</div>
+            </div>
+            <button class="btn" id="open-history">Open history</button>
+          </div>
         </div>
-        <button class="link" id="open-history">Open history</button>
       </section>
 
-      <section>
-        <h2>AI re-read</h2>
-        <div class="row">
-          <div class="grow">
-            <div class="label">Provider</div>
-            <div class="path">For blurry text or handwriting. Only the area you click "Re-read with AI" on is sent, with your own key.</div>
+      <!-- ---------------------------------------------------------- ai -->
+      <section class="page" data-page="ai" hidden>
+        <header>
+          <h1>AI re-read</h1>
+          <p>For blurry text or handwriting. Only the area you click “Re-read with AI” on is sent, using your own key.</p>
+        </header>
+        <div class="group">
+          <div class="row">
+            <div class="row-text grow">
+              <div class="label">Provider</div>
+            </div>
+            <select id="ai-provider">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+            </select>
           </div>
-          <select id="ai-provider">
-            <option value="claude">Claude (Anthropic)</option>
-            <option value="gemini">Gemini (Google)</option>
-          </select>
+          <div class="row stack">
+            <div class="row-text">
+              <div class="label">API key</div>
+              <div class="status" id="ai-key-status"></div>
+            </div>
+            <div class="keyfield">
+              <input type="password" id="ai-key" placeholder="Paste your key" autocomplete="off" spellcheck="false" />
+              <button class="btn primary" id="ai-save">Save key</button>
+            </div>
+          </div>
         </div>
-        <div class="row">
-          <div class="grow">
-            <div class="label">API key</div>
-            <div class="status" id="ai-key-status"></div>
-          </div>
-          <div class="btns">
-            <input type="password" id="ai-key" placeholder="Paste key" autocomplete="off" spellcheck="false" />
-            <button id="ai-save">Save</button>
-          </div>
-        </div>
-        <button class="link" id="ai-remove" hidden>Remove key</button>
+        <button class="link danger" id="ai-remove" hidden>Remove key</button>
       </section>
 
-      <section>
-        <h2>General</h2>
-        <label class="row">
-          <span class="label">Start with Windows</span>
-          <input type="checkbox" id="autostart" />
-        </label>
+      <!-- ---------------------------------------------------------- general -->
+      <section class="page" data-page="general" hidden>
+        <header>
+          <h1>General</h1>
+          <p>How the app starts.</p>
+        </header>
+        <div class="group">
+          <label class="row">
+            <span class="row-text grow">
+              <span class="label">Start with Windows</span>
+              <span class="hint">So your shortcuts work right after you sign in.</span>
+            </span>
+            <input type="checkbox" role="switch" class="switch" id="autostart" />
+          </label>
+        </div>
       </section>
     </main>
   </body>

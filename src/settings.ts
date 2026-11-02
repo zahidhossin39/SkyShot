@@ -32,13 +32,23 @@ function pretty(accel: string): string {
     .join(" + ");
 }
 
+/** "Ctrl + PrtSc" -> <kbd>Ctrl</kbd> + <kbd>PrtSc</kbd> */
+function keycaps(el: HTMLElement, combo: string) {
+  el.replaceChildren(
+    ...combo.split(" + ").flatMap((k, i) => {
+      const key = Object.assign(document.createElement("kbd"), { textContent: k });
+      return i ? [Object.assign(document.createElement("span"), { className: "plus", textContent: "+" }), key] : [key];
+    }),
+  );
+}
+
 let current: SettingsView;
 
 function render(v: SettingsView) {
   current = v;
   buttons.forEach((b) => {
     const action = b.dataset.action as Action;
-    b.textContent = pretty(action === "capture" ? v.hotkeyCapture : v.hotkeyText);
+    keycaps(b, pretty(action === "capture" ? v.hotkeyCapture : v.hotkeyText));
     b.classList.remove("recording");
   });
   setStatus($("capture-status"), v.captureActive);
@@ -211,5 +221,23 @@ $("ai-key").addEventListener("keydown", (e) => {
   if (e.key === "Enter") $("ai-save").click();
 });
 $("ai-remove").addEventListener("click", () => setAi(""));
+
+// ---------------------------------------------------------------- pages
+
+const navButtons = document.querySelectorAll<HTMLButtonElement>("nav [data-page]");
+function showPage(name: string) {
+  if (!document.querySelector(`section[data-page="${name}"]`)) name = "shortcuts";
+  document.querySelectorAll<HTMLElement>("section.page").forEach((s) => (s.hidden = s.dataset.page !== name));
+  navButtons.forEach((b) => (b.dataset.page === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+  try {
+    localStorage.setItem("settings-page", name); // reopen where you left off
+  } catch {}
+}
+navButtons.forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page!)));
+let lastPage = "shortcuts";
+try {
+  lastPage = localStorage.getItem("settings-page") ?? lastPage;
+} catch {}
+showPage(lastPage);
 
 refresh();
