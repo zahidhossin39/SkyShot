@@ -235,10 +235,10 @@ function renderUI() {
   uctx.fillStyle = "rgba(0, 0, 0, 0.45)";
   uctx.fillRect(0, 0, W, H);
   const s = scale();
-  // Snap preview: the window under the cursor, selectable with one click.
+  // Snap preview: outline the window under the cursor (one click selects it). The screen stays
+  // dim until you actually select, like Lightshot; un-dimming a maximised window lit up everything.
   if (!sel && hoverWin) {
     const r = hoverWin;
-    uctx.clearRect(r.x, r.y, r.w, r.h);
     uctx.strokeStyle = ACCENT;
     uctx.lineWidth = Math.max(2, Math.round(2 * s));
     uctx.strokeRect(r.x + uctx.lineWidth / 2, r.y + uctx.lineWidth / 2, r.w - uctx.lineWidth, r.h - uctx.lineWidth);
@@ -469,7 +469,12 @@ async function open(p: OpenPayload) {
     tool = "select";
     renderUI();
     updateChrome();
+    // Show only once the frozen frame is on screen (else Windows shows the old/blank surface
+    // for a frame). The dim layer starts invisible, so the first visible frame is identical to
+    // the real screen; then it fades in.
+    await painted();
     const ms = await invoke<number>("overlay_shown");
+    requestAnimationFrame(() => document.body.classList.remove("pre"));
     console.log(`[overlay] visible ${ms} ms after hotkey`);
   } catch (e) {
     console.error("[overlay] open failed", e);
@@ -478,6 +483,8 @@ async function open(p: OpenPayload) {
 }
 
 function reset() {
+  document.body.classList.remove("leaving");
+  document.body.classList.add("pre"); // next open starts with the dim invisible
   opened = false;
   busy = false;
   original = null;
@@ -502,7 +509,26 @@ function reset() {
   W = H = 0;
 }
 
-const close = () => invoke("overlay_close");
+/** Two frames: the next paint has been presented. Capped, since a hidden window may not paint. */
+const painted = () =>
+  Promise.race([
+    new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    new Promise((r) => setTimeout(r, 50)),
+  ]);
+
+const LEAVE_MS = 110;
+/** Fade the dim + toolbars out over the frozen frame before the window hides, so closing
+ * doesn't snap. Only the chrome fades: the frozen screenshot underneath matches the real screen. */
+async function leave() {
+  hideTip();
+  document.body.classList.add("leaving");
+  await new Promise((r) => setTimeout(r, LEAVE_MS));
+}
+
+const close = async () => {
+  await leave();
+  return invoke("overlay_close");
+};
 
 /** Selected area as raw RGBA, ready to send to Rust. */
 function cropSelection() {
@@ -518,6 +544,8 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   if (!sel || busy) return;
   busy = true;
   const { bytes, headers } = cropSelection();
+  // Save as opens a dialog, so it can't wait on a fade first; the rest fade out.
+  if (action !== "saveas") await leave();
   try {
     await invoke("finish", bytes, { headers: { ...headers, "x-action": action } });
   } catch (e) {
@@ -531,6 +559,7 @@ async function pin() {
   commitNoteInput();
   busy = true;
   const { bytes, headers } = cropSelection();
+  await leave();
   try {
     await invoke("pin", bytes, { headers: { ...headers, "x-left": String(sel.x), "x-top": String(sel.y) } });
   } catch (e) {
@@ -542,6 +571,7 @@ async function pin() {
 async function scrollCapture() {
   if (!sel || busy) return;
   busy = true;
+  await leave();
   try {
     await invoke("scroll_capture", { x: sel.x, y: sel.y, w: sel.w, h: sel.h });
   } catch (e) {
@@ -554,6 +584,7 @@ async function grabText() {
   if (!sel || busy) return;
   busy = true;
   const { bytes, headers } = cropSelection();
+  await leave();
   try {
     await invoke("grab_text", bytes, { headers });
   } catch (e) {

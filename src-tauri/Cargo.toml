@@ -50,6 +50,8 @@ windows = { version = "0.62", features = [
   # Scrolling capture: move the cursor and send wheel input.
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
+  # Overlay: turn off the Windows show/hide animation.
+  "Win32_Graphics_Dwm",
 ] }
 # Same version Tauri uses; needed to post frames to the overlay via shared memory.
 webview2-com = "0.39"

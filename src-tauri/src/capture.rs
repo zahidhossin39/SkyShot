@@ -47,7 +47,35 @@ fn get_or_create(app: &AppHandle, label: &str) -> Result<WebviewWindow, String> 
         .background_color(Color(0, 0, 0, 255))
         .build()
         .map_err(|e| e.to_string())
+        .inspect(no_window_animation)
 }
+
+/// Windows plays a pop-in on show and a fade on hide. On a full-screen frozen screenshot that
+/// reads as a glitch, so turn it off; the page does its own short fade of the dim layer.
+#[cfg(windows)]
+fn no_window_animation(win: &WebviewWindow) {
+    use windows::{
+        core::BOOL,
+        Win32::{
+            Foundation::HWND,
+            Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED},
+        },
+    };
+    if let Ok(h) = win.hwnd() {
+        let off = BOOL(1);
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                HWND(h.0 as _),
+                DWMWA_TRANSITIONS_FORCEDISABLED,
+                &off as *const BOOL as *const _,
+                std::mem::size_of::<BOOL>() as u32,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn no_window_animation(_: &WebviewWindow) {}
 
 /// Create one hidden overlay per monitor at startup so the first capture is fast too.
 pub fn warm_up(app: &AppHandle) {
@@ -254,7 +282,8 @@ pub fn close(app: &AppHandle) {
     *state.session.lock().unwrap() = None;
     state.frames.lock().unwrap().clear();
     for w in overlay_windows(app) {
-        let _ = app.emit_to(EventTarget::webview_window(w.label()), "overlay:reset", ());
+        // Hide first: the reset shrinks the canvases, which flashed black while still visible.
         let _ = w.hide();
+        let _ = app.emit_to(EventTarget::webview_window(w.label()), "overlay:reset", ());
     }
 }

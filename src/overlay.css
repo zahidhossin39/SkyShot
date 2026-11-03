@@ -41,6 +41,22 @@ canvas {
   cursor: crosshair;
 }
 
+/* Open: the window appears showing only the frozen screenshot (identical to the real screen),
+   then the dim and the hint fade in. Close: the same in reverse before the window hides. */
+body > *:not(#view) {
+  transition: opacity 140ms var(--ease-out);
+}
+
+body.pre > *:not(#view) {
+  opacity: 0;
+  transition: none;
+}
+
+body.leaving > *:not(#view) {
+  opacity: 0;
+  transition-duration: 110ms;
+}
+
 /* ---------------------------------------------------------------- hint + size */
 
 #hint {
