@@ -24,17 +24,20 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
     // Small text reads much better at 2x (symbols, punctuation; measured on code and
     // API-key samples), big text slightly worse, and we only learn the size from a pass.
     // So the 2x pass starts right away in parallel and is used only if text is small.
-    let (tx, rx) = std::sync::mpsc::channel();
-    if can_upscale(width, height, max_dim) {
+    // Only make the channel when that pass runs: a Sender left alive here made `recv` wait
+    // forever on images too big to double (tall scrolling captures).
+    let rx = can_upscale(width, height, max_dim).then(|| {
+        let (tx, rx) = std::sync::mpsc::channel();
         let src = rgba.to_vec();
         std::thread::spawn(move || {
             init();
             let _ = tx.send(read_words(&double(&src, width), width * 2, height * 2));
         });
-    }
+        rx
+    });
     let lines = read_words(rgba, width, height)?;
     if median_height(&lines) < SMALL_TEXT_PX {
-        if let Ok(big) = rx.recv() {
+        if let Some(Ok(big)) = rx.map(|rx| rx.recv()) {
             println!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
             let mut big = big?;
             for w in big.iter_mut().flatten() {
@@ -274,6 +277,24 @@ mod tests {
             assert!(matched > 0 || native.is_empty(), "{path:?}: no words in common");
             std::fs::write(path.with_extension("json"), serde_json::to_string(&ocr).unwrap()).unwrap();
         }
+    }
+
+    /// Regression: a selection too tall for the 2x pass (scrolling captures) with small text
+    /// used to wait forever for that pass, so the shot never reached history.
+    #[test]
+    fn tall_small_text_finishes() {
+        let Ok(dir) = std::env::var("OCR_SAMPLES") else { return };
+        let small = image::open(format!("{dir}/small.png")).unwrap().to_rgba8();
+        let mut tall = image::RgbaImage::from_pixel(small.width(), 6000, image::Rgba([255, 255, 255, 255]));
+        let mut y = 0;
+        while y + small.height() <= 6000 {
+            image::imageops::overlay(&mut tall, &small, 0, y as i64);
+            y += small.height() + 10;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || tx.send(recognize(tall.as_raw(), tall.width(), 6000).map(|o| o.text.len())));
+        let got = rx.recv_timeout(std::time::Duration::from_secs(30)).expect("OCR hung on a tall image");
+        assert!(got.unwrap() > 0);
     }
 
     #[test]

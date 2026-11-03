@@ -245,6 +245,7 @@ async fn pin(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Res
 fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32, h: u32) -> Result<(), String> {
     let idx: usize = window.label().trim_start_matches("overlay-").parse().map_err(|_| "not an overlay")?;
     capture::close(&app);
+    scroll::ACTIVE.store(true, std::sync::atomic::Ordering::SeqCst);
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(250)); // let the overlay disappear
         let back = app.cursor_position().ok();
@@ -256,17 +257,28 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
                     .map(|img| image::imageops::crop_imm(&img, x, y, w, h).to_image())
                     .map_err(|e| e.to_string())
             };
-            // One notch is ~100-150 px; keep each step well under the area's height so frames overlap.
-            let notches = (h / 250).clamp(1, 5) as i32;
+            // Park the cursor over the area once; if the user moves it (or presses Esc), stop.
             let (cx, cy) = (mx + (x + w / 2) as i32, my + (y + h / 2) as i32);
-            scroll::run(grab, || {
-                scroll::wheel_at(cx, cy, notches);
+            scroll::move_cursor(cx, cy);
+            output::notify(&app, "Scrolling capture…", "Hands off. Move the mouse or press Esc to stop early.");
+            scroll::run(grab, |n| {
+                if scroll::user_interrupted(cx, cy) {
+                    return false;
+                }
+                scroll::wheel(n);
                 std::thread::sleep(std::time::Duration::from_millis(350)); // smooth scrolling settles
+                !scroll::user_interrupted(cx, cy)
             })
         })();
-        if let Some(p) = back {
-            scroll::move_cursor(p.x as i32, p.y as i32);
+        // Put the cursor back, unless the user already took it.
+        let mon_origin = xcap::Monitor::all().ok().and_then(|m| m.into_iter().nth(idx)).and_then(|m| Some((m.x().ok()?, m.y().ok()?)));
+        if let (Some(p), Some((mx, my))) = (back, mon_origin) {
+            if !scroll::user_interrupted(mx + (x + w / 2) as i32, my + (y + h / 2) as i32) {
+                scroll::move_cursor(p.x as i32, p.y as i32);
+            }
         }
+        scroll::ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
+        println!("[scroll] {x},{y} {w}x{h} -> {:?}", result.as_ref().map(|i| i.dimensions()));
         match result {
             Ok(img) => {
                 let (iw, ih) = img.dimensions();
@@ -333,8 +345,10 @@ fn history_reveal(app: AppHandle, id: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Async on purpose: building a window inside a sync command deadlocks WebView2 on Windows,
+/// which left the History window unable to close.
 #[tauri::command]
-fn open_history_window(app: AppHandle) {
+async fn open_history_window(app: AppHandle) {
     open_history(&app);
 }
 

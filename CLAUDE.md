@@ -30,6 +30,8 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 - Browser mock: `ctrl+c` sent by the pane tool and `execCommand('copy')` don't fire a copy event; test the Live Text copy handler by dispatching a `ClipboardEvent('copy', { clipboardData: new DataTransfer() })`.
 - Real windows CAN be tested from PowerShell via Win32 (Add-Type): FindWindow by title (pass `[NullString]::Value`, not `$null`, for the class), call SetProcessDpiAwarenessContext(-4) first or rects come back scaled, then SendKeys / mouse_event for input. A temporary CLI hook in the single-instance handler can trigger a feature (remove before commit).
 - To test a page inside a real window: temporary hook calls `window.eval(js)`, and the JS reports back through a temporary `debug_log` command that prints to dev.log. Remove both before commit.
+- Create windows only from async commands or main-thread event handlers. A window built in a sync command (`open_history_window` was) shows up but never closes (WebView2 deadlock).
+- Real-app test scripts (UI Automation + Win32 + SendKeys) live in the session scratchpad: `history-close-loop.ps1`, `scroll-loop.ps1`.
 - Window dragging (`startDragging`) swallows mouse-up, so the page never sees `dblclick`. Time the presses yourself.
 - Computer-use can't grant the dev build (not an installed app), so the real overlay can't be driven by Claude; ask the owner to hand-test.
 - PowerShell `Get-Content -Raw` reads BOM-less UTF-8 as ANSI and mangles `…`/`×`. Use the Edit tool or `[IO.File]` with UTF8Encoding($false).

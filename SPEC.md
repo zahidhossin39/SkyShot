@@ -124,6 +124,7 @@ If a decision changes, update this file in the same commit.
 ### Scrolling capture (built on experiment/v2)
 - Toolbar button or `L`: the overlay closes, the selected area is scrolled with the mouse wheel and grabbed after each step, and frames are stitched by matching pixel rows (top/bottom 10% ignored so sticky headers don't break it). Stops when the page stops moving, or after 150 steps / 20,000 px. Result is copied, saved to History, and a notification shows its size. Cursor is put back afterwards.
 - Marks drawn in the overlay are not included (it captures the live window).
+- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~60% of the area after the first one. New captures are ignored while it runs. A notification says it started.
 - Tested on a real Notepad with 300 lines: scrolled top to bottom on its own, 700×7398 in ~39 s, slices checked by eye with no seams or doubled lines. Stitch logic has unit tests (sticky header, blank areas, full page).
 
 ### History rules (v3)

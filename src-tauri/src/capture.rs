@@ -60,6 +60,10 @@ pub fn warm_up(app: &AppHandle) {
 }
 
 pub fn start(app: &AppHandle, mode: Mode) {
+    // A scrolling capture is driving the mouse; a new overlay would land in its frames.
+    if crate::scroll::ACTIVE.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let state = app.state::<AppState>();
     {
         let mut session = state.session.lock().unwrap();
