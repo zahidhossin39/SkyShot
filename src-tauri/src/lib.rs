@@ -266,7 +266,7 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
                     return false;
                 }
                 scroll::wheel(n);
-                std::thread::sleep(std::time::Duration::from_millis(350)); // smooth scrolling settles
+                std::thread::sleep(std::time::Duration::from_millis(scroll::SETTLE_MS));
                 !scroll::user_interrupted(cx, cy)
             })
         })();

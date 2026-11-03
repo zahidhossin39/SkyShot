@@ -26,7 +26,8 @@ If a decision changes, update this file in the same commit.
 ## 3. Core UX
 
 ### Capture flow (Lightshot-style, edit in place)
-1. Press hotkey → screen freezes → dim overlay covers **all monitors**.
+1. Press hotkey → screen freezes → dim overlay covers **all monitors**. Like Lightshot, the whole screen stays dim until you drag; only the selection is clear. Hovering a window only outlines it.
+   - Smooth open/close: Windows' own show/hide animation is off on the overlay (DWM `TRANSITIONS_FORCEDISABLED`). The window is shown only after the frozen frame is painted, then the dim layer fades in (140 ms). On close or finish, the UI fades out (110 ms) and the window hides before it resets, so no black flash. Measured: no black frame either way.
 2. Drag a region.
 3. A toolbar appears **right next to the selection**. There is no separate editor window.
 4. Edit (blur, OCR, etc.).
@@ -118,13 +119,20 @@ If a decision changes, update this file in the same commit.
 ### Zoom loupe, colour picker, window snap (built on experiment/v2)
 - Loupe: OFF by default (owner found the always-on magnifier annoying); press `Z` to toggle it per capture. When on, while choosing an area (before selecting, while dragging a new one, or while resizing an edge), a 120 px magnifier follows the cursor. It shows 15×15 pixels at 8×, the centre pixel outlined, its hex and its x,y. It flips sides near screen edges.
 - `C` (while the loupe shows) copies the hex, e.g. `#1E40AF`. The colour comes from the original screenshot, not from our marks.
-- Window snap: before selecting, the window under the cursor is outlined; a click (no drag) selects exactly that window. Rust lists windows after the frames are sent (xcap, z-order, own windows and windows under 40 px dropped, clipped per monitor). That took ~3 ms in testing, off the hotkey path (hotkey to visible unchanged at ~170 ms). Rects matched DPI-aware Win32 rects exactly.
+- Window snap: before selecting, the window under the cursor is outlined (screen stays dim); a click (no drag) selects exactly that window. Rust lists windows after the frames are sent (xcap, z-order, own windows and windows under 40 px dropped, clipped per monitor). That took ~3 ms in testing, off the hotkey path (hotkey to visible unchanged at ~170 ms). Rects matched DPI-aware Win32 rects exactly.
 - Not done: snapping to UI elements inside a window (buttons, panels). That needs UI Automation, so it's a later maybe.
 
 ### Scrolling capture (built on experiment/v2)
-- Toolbar button or `L`: the overlay closes, the selected area is scrolled with the mouse wheel and grabbed after each step, and frames are stitched by matching pixel rows (top/bottom 10% ignored so sticky headers don't break it). Stops when the page stops moving, or after 150 steps / 20,000 px. Result is copied, saved to History, and a notification shows its size. Cursor is put back afterwards.
+- Toolbar button or `L`: the overlay closes, the selected area is scrolled with the mouse wheel and grabbed after each step, and frames are stitched by matching pixel rows (top/bottom 10% ignored so sticky headers don't break it). Stops when the page hasn't moved for 4 steps in a row, or after 150 steps / 20,000 px. Fewer than 4 cut off a pinned section, where the page holds still while you scroll. Result is copied, saved to History, and a notification shows its size. Cursor is put back afterwards.
 - Marks drawn in the overlay are not included (it captures the live window).
-- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~60% of the area after the first one. New captures are ignored while it runs. A notification says it started.
+- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~1/3 of the area after the first one (sized from the largest distance a notch has moved). Half the area left too little overlap on animated sites. New captures are ignored while it runs. A notification says it started.
+- Matching (fixed on zaidhossain.com, which stopped after one frame at first):
+  - The frame is split into 8 vertical strips. Each strip lists every shift it fits, and the shift the most strips accept wins (at least 2), so an animated card only spoils its own strips. One vote per strip failed on repeating lines (Notepad): every text strip fit any multiple of the line height and outvoted the line-number strip. A lone strip never decides. On a tie, movement beats "didn't move", because a sticky column stays put.
+  - Rows match on a tolerant signature (average colour), because browsers re-render text slightly after a scroll.
+  - Only 60% of overlapping rows must agree, because scroll effects (text recolouring, images fading in) change about a third of them. Among the near-best shifts, the closest fit wins.
+  - When the strips can't agree (a mostly blank overlap, a section that expands as you scroll, a pinned section), it guesses the step: median px per notch so far × notches. The guess is refined by a whole-frame fit that includes blank rows, so section edges pin it down. The refined value is used if at least 80% of rows fit (right ones scored 0.98+); otherwise the plain step is used (refined values at 0.64–0.71 doubled text). At most 10 guesses in a row (a pinned section took 4+). A frame that didn't change at all counts as "didn't move", so a blank end still stops.
+  - The wait after each scroll is 700 ms, so smooth scrolling and fade-ins finish. At 350 ms, images were caught half faded in.
+- Known limits: sticky columns repeat down the image, text-reveal animations can be caught mid-way, and pinned sections come out as slices. Every row-stitching tool has these.
 - Tested on a real Notepad with 300 lines: scrolled top to bottom on its own, 700×7398 in ~39 s, slices checked by eye with no seams or doubled lines. Stitch logic has unit tests (sticky header, blank areas, full page).
 
 ### History rules (v3)
