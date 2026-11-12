@@ -4,7 +4,8 @@ Read `SPEC.md` first. It holds every product decision, the roadmap (v1/v2/v3) an
 
 - Stack: Tauri 2 (TypeScript UI, Rust core), Windows first.
 - When a decision changes, update SPEC.md in the same commit.
-- Git co-author line: not yet decided. Leave it out until the owner answers (ask before the first push). No git remote yet.
+- Git co-author line: leave it out (owner, 2026-11-13).
+- GitHub: public repo `zahidhossin39/shutter`, MIT. Ask before every push.
 
 ## Status (2026-10-29)
 
