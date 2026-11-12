@@ -8,6 +8,7 @@ use tauri::{
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let capture_i = MenuItem::with_id(app, "capture", "Capture region", true, None::<&str>)?;
     let text_i = MenuItem::with_id(app, "text", "Grab text", true, None::<&str>)?;
+    let history_i = MenuItem::with_id(app, "history", "History…", true, None::<&str>)?;
     let settings_i = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
@@ -16,6 +17,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &capture_i,
             &text_i,
             &PredefinedMenuItem::separator(app)?,
+            &history_i,
             &settings_i,
             &quit_i,
         ],
@@ -25,12 +27,13 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("Screenshot App")
+        .tooltip("Shutter")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "capture" => capture::start(app, Mode::Capture),
             "text" => capture::start(app, Mode::Text),
+            "history" => crate::open_history(app),
             "settings" => crate::open_settings(app),
             "quit" => app.exit(0),
             _ => {}

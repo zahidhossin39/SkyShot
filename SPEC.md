@@ -1,4 +1,4 @@
-# Screenshot App — Spec
+# Shutter — Spec
 
 Single source of truth for this project. Decisions here came from a grilling session on 2026-10-28.
 If a decision changes, update this file in the same commit.
@@ -26,7 +26,8 @@ If a decision changes, update this file in the same commit.
 ## 3. Core UX
 
 ### Capture flow (Lightshot-style, edit in place)
-1. Press hotkey → screen freezes → dim overlay covers **all monitors**.
+1. Press hotkey → screen freezes → dim overlay covers **all monitors**. Like Lightshot, the whole screen stays dim until you drag; only the selection is clear. Hovering a window only outlines it.
+   - Smooth open/close: Windows' own show/hide animation is off on the overlay (DWM `TRANSITIONS_FORCEDISABLED`). The window is shown only after the frozen frame is painted, then the dim layer fades in (140 ms). On close or finish, the UI fades out (110 ms) and the window hides before it resets, so no black flash. Measured: no black frame either way.
 2. Drag a region.
 3. A toolbar appears **right next to the selection**. There is no separate editor window.
 4. Edit (blur, OCR, etc.).
@@ -62,6 +63,8 @@ If a decision changes, update this file in the same commit.
 - One click "Redact all", or untick individual ones.
 - **Click any word** to redact just that word.
 - Not fully automatic. Why: auto-hiding can remove things you meant to show, and you may not notice.
+- **Built (experiment/v2 branch):** toolbar shield button or `S`. Red dashed boxes = will be hidden; click a box to keep it, click any other word to add it; `Enter` redact, `Esc` back. Uses Black box unless Blur/Pixelate is the active tool. The whole batch is one undo step.
+- Detection is regex on each OCR line (`src/detect.ts`, tests in `detect.test.ts`, run `npm test`): email, IPv4 (port included), card (Luhn check), phone (9–15 digits, 8 if it starts with `+`), key/token (any 20+ char letters+digits token, plus an `sk-`/`ghp_`-style prefix word because OCR splits it). Known false positive: a plain 10-digit number reads as a phone. Accepted since every box is reviewed.
 
 ## 5. Feature: Text extraction (OCR)
 
@@ -71,6 +74,10 @@ If a decision changes, update this file in the same commit.
   - **Bring your own API key** (Claude or Gemini) pasted in settings. No server.
   - Only the image the user clicks AI on gets sent.
   - **Scope: better OCR only.** No translate or Q&A for now (easy to add later).
+  - **Built (experiment/v2):** "Re-read with AI" button in the Text panel replaces the panel text with the AI's transcription. Settings → AI re-read: pick Claude or Gemini, paste key; the key is stored in Windows Credential Manager (never in settings.json, never sent to the page, shown as "…ab12").
+  - Claude: Messages API, `claude-opus-5-5`, effort medium, `fallbacks: "default"` (safety decline re-runs on Anthropic's fallback model). Gemini: `v1beta` generateContent, `gemini-2.5-flash` (key in `x-goog-api-key` header). HTTPS via Windows' own `Windows.Web.Http`, no new crate.
+  - The image sent is the cropped, already-redacted selection, so hidden text never leaves the PC.
+  - Tested: request/response parsing unit tests; a real round trip to both APIs with a fake key (gets their "bad key" errors back as plain messages, set `AI_NET_TEST=1`); Credential Manager save/replace/remove. Not tested: a real transcription (needs the owner's key).
 
 ### OCR UX (all four wanted; staged across versions)
 | Mode | What it does | Version |
@@ -79,6 +86,11 @@ If a decision changes, update this file in the same commit.
 | Instant text hotkey | `Ctrl+Shift+PrtSc` → drag → text straight to clipboard, no image | v1 |
 | Live Text | Text in the captured image becomes selectable like a web page; highlight words and copy | v2 |
 | Smart actions | Detect links / emails / phones / code → one click opens a URL, copies code as a block, etc. | v2 |
+
+**Built (experiment/v2):** Live Text and Smart actions both hang off the **Text** button (`T`). One OCR pass fills the panel, the live layer and the chips.
+- Live Text: invisible OCR words laid over the selection (like a PDF text layer). Drag to highlight, `Ctrl+C` copies the selected words (whole words, one line per OCR line) instead of the image. `Esc` closes the panel and the layer. Picking a redaction tool also closes it, since the layer would catch the drag.
+- Smart actions: up to 3 chips in the panel: "Open <link>", "Copy <email>", "Copy <phone>". Links open in the default browser and close the overlay. Rust only opens `http(s)://` links with no spaces or quotes (`is_web_link`), because the text comes from a screenshot.
+- Not done: "copy code as a block". The panel's Copy all already keeps line breaks.
 
 ## 6. Other features
 
@@ -91,12 +103,52 @@ If a decision changes, update this file in the same commit.
 | AI re-read | See §5. | v3 |
 | Scrolling capture | Auto-scroll and stitch long pages/chats. Hard. | v3 |
 
+### Annotations (built on experiment/v2)
+- Tools: Arrow `A`, Box outline `O`, Highlighter `H` (rectangle, multiply blend so text stays crisp), Text note `W`, Steps `N` (numbered badges that renumber when one is deleted). Colour `C` cycles red / yellow / green / blue / black.
+- Editable after placing: with Select (`V`), click a mark to pick it (dashed outline), drag to move, `Del` deletes it, `C` recolours it, double-click a text note to edit it. Text: `Enter` done, `Shift+Enter` new line, `Esc` discard, clicking away also finishes it.
+- Annotations always sit above redactions: a blur drawn over an arrow never smears the arrow. Why: the redacted image is kept as a separate base canvas, and notes are redrawn on top. That also makes moving a note cheap, with no re-blur.
+- Undo is a snapshot history of redactions and notes, so `Ctrl+Z` also reverts moves, edits, recolours and deletes.
+- Not done (skipped on purpose): freehand pen, resizing a placed mark (redraw it instead), font size picker. The toolbar is ~800 CSS px wide now, which fits 1366×768 at 125%.
+
+### Pin to screen (built on experiment/v2)
+- Toolbar pin button or `F`: the overlay closes and the selection floats in an always-on-top window, placed exactly where it was captured (annotations and redactions included).
+- Drag to move. Scroll to zoom (10% steps, 20–500%), and `0` resets to 100%. `Ctrl+C` copies it. `Esc`, double-click or the hover × closes it. Any number of pins can be open.
+- Rust keeps each pin's pixels (`pin.rs`, dropped when its window closes) and gives the page a PNG. Pin windows get their own capability (`capabilities/pin.json`: drag, resize, show, focus, close) instead of widening the overlay's.
+- Tested on the real window via Win32: position, 400×300 client size, zoom, reset, drag, Esc, double-click, Ctrl+C.
+
+### Zoom loupe, colour picker, window snap (built on experiment/v2)
+- Loupe: OFF by default (owner found the always-on magnifier annoying); press `Z` to toggle it per capture. When on, while choosing an area (before selecting, while dragging a new one, or while resizing an edge), a 120 px magnifier follows the cursor. It shows 15×15 pixels at 8×, the centre pixel outlined, its hex and its x,y. It flips sides near screen edges.
+- `C` (while the loupe shows) copies the hex, e.g. `#1E40AF`. The colour comes from the original screenshot, not from our marks.
+- Window snap: before selecting, the window under the cursor is outlined (screen stays dim); a click (no drag) selects exactly that window. Rust lists windows after the frames are sent (xcap, z-order, own windows and windows under 40 px dropped, clipped per monitor). That took ~3 ms in testing, off the hotkey path (hotkey to visible unchanged at ~170 ms). Rects matched DPI-aware Win32 rects exactly.
+- Not done: snapping to UI elements inside a window (buttons, panels). That needs UI Automation, so it's a later maybe.
+
+### Scrolling capture (built on experiment/v2)
+- Toolbar button or `L`: the overlay closes, the selected area is scrolled with the mouse wheel and grabbed after each step, and frames are stitched by matching pixel rows (top/bottom 10% ignored so sticky headers don't break it). Stops when the page hasn't moved for 4 steps in a row, or after 150 steps / 20,000 px. Fewer than 4 cut off a pinned section, where the page holds still while you scroll. Result is copied, saved to History, and a notification shows its size. Cursor is put back afterwards.
+- Marks drawn in the overlay are not included (it captures the live window).
+- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~1/3 of the area after the first one (sized from the largest distance a notch has moved). Half the area left too little overlap on animated sites. New captures are ignored while it runs. A notification says it started.
+- Matching (fixed on zaidhossain.com, which stopped after one frame at first):
+  - The frame is split into 8 vertical strips. Each strip lists every shift it fits, and the shift the most strips accept wins (at least 2), so an animated card only spoils its own strips. One vote per strip failed on repeating lines (Notepad): every text strip fit any multiple of the line height and outvoted the line-number strip. A lone strip never decides. On a tie, movement beats "didn't move", because a sticky column stays put.
+  - Rows match on a tolerant signature (average colour), because browsers re-render text slightly after a scroll.
+  - Only 60% of overlapping rows must agree, because scroll effects (text recolouring, images fading in) change about a third of them. Among the near-best shifts, the closest fit wins.
+  - When the strips can't agree (a mostly blank overlap, a section that expands as you scroll, a pinned section), it guesses the step: median px per notch so far × notches. The guess is refined by a whole-frame fit that includes blank rows, so section edges pin it down. The refined value is used if at least 80% of rows fit (right ones scored 0.98+); otherwise the plain step is used (refined values at 0.64–0.71 doubled text). At most 10 guesses in a row (a pinned section took 4+). A frame that didn't change at all counts as "didn't move", so a blank end still stops.
+  - The wait after each scroll is 700 ms, so smooth scrolling and fade-ins finish. At 350 ms, images were caught half faded in.
+- Known limits: sticky columns repeat down the image, text-reveal animations can be caught mid-way, and pinned sections come out as slices. Every row-stitching tool has these.
+- Tested on a real Notepad with 300 lines: scrolled top to bottom on its own, 700×7398 in ~39 s, slices checked by eye with no seams or doubled lines. Stitch logic has unit tests (sticky header, blank areas, full page).
+
 ### History rules (v3)
 - **Retention is user-configurable in settings**: number of days (e.g. 1–365) or "forever". Default 30.
   - Changing the value applies to existing shots too (shorten → older ones get deleted).
 - **Star** a shot to keep it forever, regardless of retention.
 - **Stores the redacted version only.** Text under redacted areas is **never indexed**.
   - Why: a password you hid should never be findable by search or sit on disk.
+
+### Searchable history (built on experiment/v2)
+- **What's saved:** every finished capture (Copy, Save, Copy & save, Save as when not cancelled, Pin), in the background after the overlay closes. It is saved exactly as exported, so redactions and annotations are burned in and OCR runs on that image. Instant text grab is not saved, since it has no image.
+- **Storage:** app data dir `history/`, holding `<id>.png`, `<id>.thumb.png` (fits 480×320) and `index.json` (id, time, size, OCR text, starred). One JSON index, no database. The index is written to a temp file and renamed, so a crash can't wipe it. A 600×400 shot took ~60 ms to save, OCR included.
+- **History window** (tray → History…, or Settings → Open history): search box (every word must appear, any order and case, matched words shown in a snippet), a Starred filter, and a newest-first grid. Click a thumbnail or Copy to copy it. Show in folder. Star to keep forever. Delete takes two clicks ("Sure?"). `Ctrl+F` or `/` focuses search.
+- **Retention:** Settings → History, 1 / 7 / 30 / 90 / 365 days or Forever (default 30). It applies on change (asks first when shortening), after each save, and at startup.
+- **Safety:** ids from the page are checked before they become file names, so they can't escape the folder. Thumbnails load through Tauri's asset protocol, scoped to `$APPDATA/history/**` only.
+- Tested in the real app with a temporary hook: save + OCR + files + index, thumbnail loads in the real window, search hit/miss with snippet, star saved to disk, copy, two-click delete removes the files.
 
 ## 7. Roadmap
 

@@ -6,20 +6,27 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { COLORS, drawNote, FONT_PX, isTiny, moved, noteAt, noteBox, type Note, type NoteKind, type Point, type Rect } from "./annotate";
+import { findActions, findSensitive, type Action, type Word } from "./detect";
 
 type Mode = "capture" | "text";
-type Tool = "select" | "blur" | "pixelate" | "box";
-type RedactTool = Exclude<Tool, "select">;
-type Rect = { x: number; y: number; w: number; h: number };
-type Point = { x: number; y: number };
+type RedactTool = "blur" | "pixelate" | "box";
+type Tool = "select" | RedactTool | NoteKind;
+const isRedact = (t: Tool): t is RedactTool => t === "blur" || t === "pixelate" || t === "box";
+const isNote = (t: Tool): t is NoteKind => t !== "select" && !isRedact(t);
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 type OpenPayload = { mode: Mode; width: number; height: number };
-type Op = { tool: RedactTool; rect: Rect };
+type Op = { tool: RedactTool; rects: Rect[] };
+type Pick = { rect: Rect; on: boolean };
+/** Smart Redact in progress: every OCR word (click to add) and the suggested boxes. */
+type Smart = { words: Rect[]; picks: Pick[]; loading: boolean; error?: string };
 type Drag =
-  | { kind: "new"; origin: Point }
+  | { kind: "new"; origin: Point; snap: Rect | null } // snap: window to select if it's just a click
   | { kind: "move"; origin: Point; start: Rect }
   | { kind: "resize"; origin: Point; start: Rect; handle: Handle }
-  | { kind: "op"; origin: Point };
+  | { kind: "op"; origin: Point }
+  | { kind: "note"; origin: Point } // drawing the last note in `notes`
+  | { kind: "notemove"; origin: Point; start: Note };
 
 const ACCENT = "#3b82f6";
 const MIN_SIZE = 3;
@@ -35,8 +42,20 @@ const toolbar = $("toolbar");
 const panel = $("textpanel");
 const textOut = $<HTMLTextAreaElement>("text-out");
 const textStatus = $("text-status");
+const liveLayer = $("livetext");
+const textActions = $("text-actions");
+const smartbar = $("smartbar");
+const smartStatus = $("smart-status");
+const smartApply = $<HTMLButtonElement>("smart-apply");
+const noteInput = $<HTMLTextAreaElement>("note-input");
+const loupe = $("loupe");
+const loupeCanvas = $<HTMLCanvasElement>("loupe-canvas");
+const lctx = loupeCanvas.getContext("2d")!;
 const tmp = document.createElement("canvas");
 const tctx = tmp.getContext("2d")!;
+/** Screenshot + redactions, without annotations, so notes can be redrawn on every mouse move. */
+const base = document.createElement("canvas");
+const bctx = base.getContext("2d")!;
 
 let mode: Mode = "capture";
 let W = 0;
@@ -49,6 +68,21 @@ let tool: Tool = "select";
 let ops: Op[] = [];
 let drag: Drag | null = null;
 let pendingOp: Rect | null = null;
+let smart: Smart | null = null;
+/** Live Text words, per OCR line, while the text panel is open. */
+let live: { el: HTMLElement; text: string }[][] | null = null;
+let notes: Note[] = [];
+let picked = -1; // selected note, for move / delete / recolour
+let color = COLORS[0];
+/** Text note being typed: where, and which note it replaces (-1 = new). */
+let editing: { at: Point; idx: number } | null = null;
+/** Undo snapshots. Covers redactions and every annotation change (add, move, edit, delete). */
+let history: { ops: Op[]; notes: Note[] }[] = [];
+/** Visible windows on this monitor, top-most first (from Rust, shortly after open). */
+let windows: Rect[] = [];
+let hoverWin: Rect | null = null;
+let lastPoint: Point | null = null;
+let hex = "";
 
 /** Physical pixels per CSS pixel. */
 const scale = () => (W ? W / window.innerWidth : window.devicePixelRatio);
@@ -105,8 +139,10 @@ const CURSORS: Record<Handle, string> = {
 
 // ---------------------------------------------------------------- redaction
 
-/** Burn one redaction into the view canvas. Pixels underneath are destroyed. */
-function applyOp({ tool, rect: { x, y, w, h } }: Op) {
+/** Burn a redaction into the view canvas. Pixels underneath are destroyed. */
+const applyOp = (op: Op) => op.rects.forEach((r) => applyRect(op.tool, r));
+
+function applyRect(tool: RedactTool, { x, y, w, h }: Rect) {
   if (tool === "box") {
     vctx.fillStyle = "#000";
     vctx.fillRect(x, y, w, h);
@@ -151,15 +187,45 @@ function applyOp({ tool, rect: { x, y, w, h } }: Op) {
   vctx.restore();
 }
 
+/** Redactions changed: rebuild the base (original + redactions), then the notes on top. */
 function renderImage() {
   if (!original) return;
   vctx.putImageData(original, 0, 0);
   ops.forEach(applyOp);
+  bctx.drawImage(view, 0, 0);
+  drawNotes();
+}
+
+/** Annotations changed: base + every note. Cheap, so it runs on every mouse move. */
+function drawNotes() {
+  vctx.drawImage(base, 0, 0);
+  const s = scale();
+  let step = 0;
+  notes.forEach((n, i) => i !== editing?.idx && drawNote(vctx, n, s, n.kind === "step" ? ++step : 0));
+}
+
+const snapshot = () => history.push({ ops: [...ops], notes: structuredClone(notes) });
+
+/** Burn a new redaction into the base, under the annotations (so arrows never get blurred). */
+function addRedaction(op: Op) {
+  snapshot();
+  ops.push(op);
+  vctx.drawImage(base, 0, 0);
+  applyOp(op);
+  bctx.drawImage(view, 0, 0);
+  drawNotes();
 }
 
 function undo() {
-  if (ops.pop()) renderImage();
+  const prev = history.pop();
+  if (!prev) return;
+  const redactionsChanged = prev.ops.length !== ops.length;
+  ({ ops, notes } = prev);
+  picked = -1;
+  if (redactionsChanged) renderImage();
+  else drawNotes();
   updateChrome();
+  renderUI();
 }
 
 // ---------------------------------------------------------------- drawing UI
@@ -168,15 +234,23 @@ function renderUI() {
   uctx.clearRect(0, 0, W, H);
   uctx.fillStyle = "rgba(0, 0, 0, 0.45)";
   uctx.fillRect(0, 0, W, H);
+  const s = scale();
+  // Snap preview: outline the window under the cursor (one click selects it). The screen stays
+  // dim until you actually select, like Lightshot; un-dimming a maximised window lit up everything.
+  if (!sel && hoverWin) {
+    const r = hoverWin;
+    uctx.strokeStyle = ACCENT;
+    uctx.lineWidth = Math.max(2, Math.round(2 * s));
+    uctx.strokeRect(r.x + uctx.lineWidth / 2, r.y + uctx.lineWidth / 2, r.w - uctx.lineWidth, r.h - uctx.lineWidth);
+  }
   if (!sel || sel.w === 0 || sel.h === 0) return;
 
-  const s = scale();
   uctx.clearRect(sel.x, sel.y, sel.w, sel.h);
   uctx.strokeStyle = ACCENT;
   uctx.lineWidth = Math.max(1, Math.round(s));
   uctx.strokeRect(sel.x + 0.5, sel.y + 0.5, sel.w - 1, sel.h - 1);
 
-  if (mode === "capture" && drag?.kind !== "new") {
+  if (mode === "capture" && drag?.kind !== "new" && !smart) {
     const hs = Math.round(6 * s);
     const cx = [sel.x, sel.x + sel.w / 2, sel.x + sel.w];
     const cy = [sel.y, sel.y + sel.h / 2, sel.y + sel.h];
@@ -198,6 +272,27 @@ function renderUI() {
     uctx.strokeRect(pendingOp.x + 0.5, pendingOp.y + 0.5, pendingOp.w - 1, pendingOp.h - 1);
     uctx.setLineDash([]);
   }
+
+  if (notes[picked]) {
+    const b = noteBox(vctx, notes[picked], s);
+    const pd = 5 * s;
+    uctx.setLineDash([4 * s, 3 * s]);
+    uctx.strokeStyle = ACCENT;
+    uctx.strokeRect(b.x - pd, b.y - pd, b.w + 2 * pd, b.h + 2 * pd);
+    uctx.setLineDash([]);
+  }
+
+  // Smart Redact suggestions: red = will be hidden, faint = kept visible.
+  if (smart) {
+    uctx.setLineDash([4 * s, 3 * s]);
+    for (const { rect: r, on } of smart.picks) {
+      uctx.fillStyle = on ? "rgba(239, 68, 68, 0.28)" : "rgba(255, 255, 255, 0.06)";
+      uctx.fillRect(r.x, r.y, r.w, r.h);
+      uctx.strokeStyle = on ? "#f87171" : "rgba(255, 255, 255, 0.6)";
+      uctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    }
+    uctx.setLineDash([]);
+  }
 }
 
 /** Position the DOM bits (hint, size label, toolbar) around the selection. */
@@ -206,8 +301,16 @@ function updateChrome() {
   const has = !!sel && sel.w >= MIN_SIZE && sel.h >= MIN_SIZE;
 
   setHint(
-    !sel
-      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}<kbd>Esc</kbd> cancel`
+    smart
+      ? `Click a box to keep it visible${SEP}Click any word to hide it${SEP}<kbd>Enter</kbd> redact${SEP}<kbd>Esc</kbd> back`
+      : live
+      ? `Drag over the image to select text${SEP}<kbd>Ctrl+C</kbd> copy${SEP}<kbd>Esc</kbd> close`
+      : !sel
+      ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}Click a window to grab it${SEP}<kbd>Z</kbd> ${loupeOn ? "hide zoom" : "zoom"}${loupeOn ? `${SEP}<kbd>C</kbd> copy colour` : ""}${SEP}<kbd>Esc</kbd> cancel`
+      : editing
+      ? `Type your text${SEP}<kbd>Enter</kbd> done${SEP}<kbd>Shift+Enter</kbd> new line${SEP}<kbd>Esc</kbd> discard`
+      : notes[picked] && tool === "select"
+      ? `Drag to move${SEP}<kbd>Del</kbd> delete${SEP}<kbd>C</kbd> colour${SEP}Double-click text to edit`
       : has && mode === "capture" && tool !== "select"
         ? `${TOOL_HINTS[tool]}${SEP}<kbd>Ctrl+Z</kbd> undo${SEP}<kbd>V</kbd> done`
         : null,
@@ -221,24 +324,43 @@ function updateChrome() {
     sizeLabel.style.top = `${top < 4 ? sel.y / s + 4 : top}px`;
   }
 
-  const showBar = has && mode === "capture" && !drag;
+  smartbar.hidden = !smart;
+  if (smart && sel) {
+    const on = smart.picks.filter((k) => k.on).length;
+    smartbar.classList.toggle("loading", smart.loading);
+    smartStatus.textContent = smart.loading
+      ? "Looking for sensitive text…"
+      : smart.error ??
+        (smart.picks.length ? `${on} of ${smart.picks.length} selected` : "Nothing found. Click words to hide them.");
+    smartApply.textContent = on ? `Redact ${on}` : "Redact";
+    smartApply.disabled = smart.loading || on === 0;
+    placeNear(smartbar, sel);
+  }
+
+  const showBar = has && mode === "capture" && !drag && !smart;
   toolbar.hidden = !showBar;
   if (!showBar) hideTip();
   if (showBar && sel) {
     toolbar.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((b) =>
       b.classList.toggle("active", b.dataset.tool === tool),
     );
-    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = ops.length === 0;
+    toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = history.length === 0;
+    toolbar.querySelector<HTMLElement>(".swatch")!.style.background = color;
     placeNear(toolbar, sel);
   }
   if (!panel.hidden && sel) placePanel();
 }
 
 const SEP = '<span class="sep">·</span>';
-const TOOL_HINTS: Record<RedactTool, string> = {
+const TOOL_HINTS: Record<Exclude<Tool, "select">, string> = {
   blur: "Drag inside the selection to blur",
   pixelate: "Drag inside the selection to pixelate",
   box: "Drag inside the selection to black it out",
+  arrow: "Drag to draw an arrow",
+  rect: "Drag to draw a box",
+  mark: "Drag over text to highlight it",
+  text: "Click to add text",
+  step: "Click to add numbered steps (1, 2, 3…)",
 };
 
 let hintHtml: string | null = null;
@@ -333,16 +455,26 @@ async function open(p: OpenPayload) {
     mode = p.mode;
     W = p.width;
     H = p.height;
-    view.width = ui.width = W;
-    view.height = ui.height = H;
+    view.width = ui.width = base.width = W;
+    view.height = ui.height = base.height = H;
     original = new ImageData(new Uint8ClampedArray(await receiveFrame()), W, H);
     vctx.putImageData(original, 0, 0);
+    bctx.putImageData(original, 0, 0);
     sel = null;
     ops = [];
+    notes = [];
+    history = [];
+    picked = -1;
+    smart = null;
     tool = "select";
     renderUI();
     updateChrome();
+    // Show only once the frozen frame is on screen (else Windows shows the old/blank surface
+    // for a frame). The dim layer starts invisible, so the first visible frame is identical to
+    // the real screen; then it fades in.
+    await painted();
     const ms = await invoke<number>("overlay_shown");
+    requestAnimationFrame(() => document.body.classList.remove("pre"));
     console.log(`[overlay] visible ${ms} ms after hotkey`);
   } catch (e) {
     console.error("[overlay] open failed", e);
@@ -351,6 +483,8 @@ async function open(p: OpenPayload) {
 }
 
 function reset() {
+  document.body.classList.remove("leaving");
+  document.body.classList.add("pre"); // next open starts with the dim invisible
   opened = false;
   busy = false;
   original = null;
@@ -358,15 +492,43 @@ function reset() {
   ops = [];
   drag = null;
   pendingOp = null;
-  toolbar.hidden = panel.hidden = sizeLabel.hidden = true;
+  smart = null;
+  notes = [];
+  history = [];
+  picked = -1;
+  editing = null;
+  windows = [];
+  hoverWin = null;
+  closeText();
+  toolbar.hidden = smartbar.hidden = sizeLabel.hidden = noteInput.hidden = loupe.hidden = true;
+  loupeOn = false;
   setHint(null);
   hideTip();
   // Shrink canvases so a hidden overlay doesn't hold a full screenshot in memory.
-  view.width = view.height = ui.width = ui.height = 1;
+  view.width = view.height = ui.width = ui.height = base.width = base.height = 1;
   W = H = 0;
 }
 
-const close = () => invoke("overlay_close");
+/** Two frames: the next paint has been presented. Capped, since a hidden window may not paint. */
+const painted = () =>
+  Promise.race([
+    new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+    new Promise((r) => setTimeout(r, 50)),
+  ]);
+
+const LEAVE_MS = 110;
+/** Fade the dim + toolbars out over the frozen frame before the window hides, so closing
+ * doesn't snap. Only the chrome fades: the frozen screenshot underneath matches the real screen. */
+async function leave() {
+  hideTip();
+  document.body.classList.add("leaving");
+  await new Promise((r) => setTimeout(r, LEAVE_MS));
+}
+
+const close = async () => {
+  await leave();
+  return invoke("overlay_close");
+};
 
 /** Selected area as raw RGBA, ready to send to Rust. */
 function cropSelection() {
@@ -382,6 +544,8 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   if (!sel || busy) return;
   busy = true;
   const { bytes, headers } = cropSelection();
+  // Save as opens a dialog, so it can't wait on a fade first; the rest fade out.
+  if (action !== "saveas") await leave();
   try {
     await invoke("finish", bytes, { headers: { ...headers, "x-action": action } });
   } catch (e) {
@@ -390,10 +554,37 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   }
 }
 
+async function pin() {
+  if (!sel || busy) return;
+  commitNoteInput();
+  busy = true;
+  const { bytes, headers } = cropSelection();
+  await leave();
+  try {
+    await invoke("pin", bytes, { headers: { ...headers, "x-left": String(sel.x), "x-top": String(sel.y) } });
+  } catch (e) {
+    console.error("[overlay] pin failed", e);
+    busy = false;
+  }
+}
+
+async function scrollCapture() {
+  if (!sel || busy) return;
+  busy = true;
+  await leave();
+  try {
+    await invoke("scroll_capture", { x: sel.x, y: sel.y, w: sel.w, h: sel.h });
+  } catch (e) {
+    console.error("[overlay] scroll capture failed", e);
+    busy = false;
+  }
+}
+
 async function grabText() {
   if (!sel || busy) return;
   busy = true;
   const { bytes, headers } = cropSelection();
+  await leave();
   try {
     await invoke("grab_text", bytes, { headers });
   } catch (e) {
@@ -402,20 +593,27 @@ async function grabText() {
   }
 }
 
+/** Text panel + Live Text + Smart actions, all from one OCR pass. */
 async function extractText() {
   if (!sel || busy) return;
+  const r = sel;
+  closeText();
+  tool = "select"; // Live Text needs the mouse; redaction tools would fight it
   panel.hidden = false;
   panel.classList.add("loading");
   textStatus.textContent = "Reading text…";
   textOut.value = "";
-  placePanel();
+  updateChrome();
   const { bytes, headers } = cropSelection();
   try {
-    const text = await invoke<string>("ocr_image", bytes, { headers });
+    const { text, lines } = await invoke<{ text: string; lines: Word[][] }>("ocr_image", bytes, { headers });
+    if (panel.hidden || sel !== r) return; // closed or reselected meanwhile
     textOut.value = text;
     const words = text.split(/\s+/).filter(Boolean).length;
     textStatus.textContent = text.trim() ? `${words} words found — fix anything, then copy` : "No text found in this area";
-    textOut.focus();
+    renderActions(findActions(text));
+    showLive(lines, r);
+    updateChrome();
   } catch (e) {
     textStatus.textContent = String(e);
   } finally {
@@ -423,12 +621,292 @@ async function extractText() {
   }
 }
 
-async function copyText() {
+function closeText() {
+  panel.hidden = true;
+  textActions.replaceChildren();
+  live = null;
+  liveLayer.hidden = true;
+  liveLayer.replaceChildren();
+  getSelection()?.removeAllRanges();
+}
+
+/** Better read of the same area by the user's AI provider. Replaces the panel text only. */
+async function aiReread() {
+  if (!sel || busy) return;
+  const r = sel;
+  const btn = $<HTMLButtonElement>("text-ai");
+  btn.disabled = true;
+  panel.classList.add("loading");
+  textStatus.textContent = "AI is reading this area…";
+  const { bytes, headers } = cropSelection(); // already redacted: hidden text is never sent
   try {
-    await invoke("copy_text", { text: textOut.value });
+    const text = await invoke<string>("ai_reread", bytes, { headers });
+    if (panel.hidden || sel !== r) return;
+    textOut.value = text;
+    textStatus.textContent = text ? "Re-read by AI — check it, then copy" : "AI found no text in this area";
+  } catch (e) {
+    textStatus.textContent = String(e);
+  } finally {
+    panel.classList.remove("loading");
+    btn.disabled = false;
+  }
+}
+
+async function copyValue(text: string) {
+  try {
+    await invoke("copy_text", { text });
     textStatus.textContent = "Copied ✓";
   } catch (e) {
     textStatus.textContent = String(e);
+  }
+}
+
+const ACTION_VERB: Record<Action["kind"], string> = { url: "Open", email: "Copy", phone: "Copy" };
+
+/** Smart actions: one-click chips for links, emails and phone numbers found in the text. */
+function renderActions(actions: Action[]) {
+  textActions.replaceChildren(
+    ...actions.slice(0, 3).map((a) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.title = a.value;
+      b.textContent = `${ACTION_VERB[a.kind]} ${a.value.replace(/^https?:\/\//i, "")}`;
+      b.onclick = () =>
+        a.kind === "url"
+          ? invoke("open_url", { url: a.value }).catch((e) => (textStatus.textContent = String(e)))
+          : copyValue(a.value);
+      return b;
+    }),
+  );
+}
+
+// ---------------------------------------------------------------- live text
+
+/** Invisible, selectable copy of the OCR words laid over the image (like a PDF text layer). */
+function showLive(lines: Word[][], r: Rect) {
+  const s = scale();
+  Object.assign(liveLayer.style, { left: `${r.x / s}px`, top: `${r.y / s}px`, width: `${r.w / s}px`, height: `${r.h / s}px` });
+  const boxes: number[] = [];
+  live = lines.map((line) =>
+    line.map((w) => {
+      const el = document.createElement("span");
+      el.textContent = w.text;
+      Object.assign(el.style, { left: `${w.x / s}px`, top: `${w.y / s}px`, fontSize: `${w.h / s}px` });
+      liveLayer.append(el);
+      boxes.push(w.w / s);
+      return { el, text: w.text };
+    }),
+  );
+  liveLayer.hidden = false;
+  // Stretch each word to its box so the highlight sits on the image's text. Read all widths
+  // first, then write, so layout runs once.
+  const els = live.flat().map((x) => x.el);
+  const widths = els.map((el) => el.offsetWidth);
+  els.forEach((el, i) => (el.style.transform = `scaleX(${widths[i] ? boxes[i] / widths[i] : 1})`));
+}
+
+// The layer's spans are positioned, so the browser's own copy would come out jumbled.
+// Rebuild it from OCR lines instead: whole words, spaces between, one line per row.
+document.addEventListener("copy", (e) => {
+  const s = getSelection();
+  if (!live || !s || s.isCollapsed || e.target === textOut) return;
+  const text = live
+    .map((line) => line.filter((w) => s.containsNode(w.el, true)).map((w) => w.text).join(" "))
+    .filter(Boolean)
+    .join("\n");
+  e.clipboardData?.setData("text/plain", text);
+  e.preventDefault();
+  textStatus.textContent = "Copied ✓";
+});
+
+// ---------------------------------------------------------------- smart redact
+
+/** OCR box (relative to the selection) -> padded screen rect inside the selection. */
+function boxToRect(b: Rect, r: Rect): Rect {
+  const p = 3 * scale();
+  const x = Math.floor(r.x + b.x - p);
+  const y = Math.floor(r.y + b.y - p);
+  return clampTo({ x, y, w: Math.ceil(r.x + b.x + b.w + p) - x, h: Math.ceil(r.y + b.y + b.h + p) - y }, r);
+}
+
+function union(ws: Rect[]): Rect {
+  const x = Math.min(...ws.map((w) => w.x));
+  const y = Math.min(...ws.map((w) => w.y));
+  return { x, y, w: Math.max(...ws.map((w) => w.x + w.w)) - x, h: Math.max(...ws.map((w) => w.y + w.h)) - y };
+}
+
+async function startSmart() {
+  if (!sel || busy || smart) return;
+  const r = sel;
+  const s: Smart = { words: [], picks: [], loading: true };
+  smart = s;
+  closeText();
+  updateChrome();
+  renderUI();
+  const { bytes, headers } = cropSelection();
+  try {
+    const { lines } = await invoke<{ lines: Word[][] }>("ocr_image", bytes, { headers });
+    s.words = lines.flat().map((w) => boxToRect(w, r));
+    s.picks = findSensitive(lines).map((f) => ({ rect: boxToRect(union(f.words), r), on: true }));
+  } catch (e) {
+    s.error = String(e);
+  }
+  s.loading = false;
+  if (smart !== s) return; // cancelled, or the overlay closed meanwhile
+  updateChrome();
+  renderUI();
+}
+
+/** Click a suggestion to toggle it; click any other word to add it. */
+function smartClick(p: Point) {
+  const s = smart!;
+  const pick = s.picks.find((k) => inside(p, k.rect));
+  if (pick) pick.on = !pick.on;
+  else {
+    const word = s.words.find((w) => inside(p, w));
+    if (word) s.picks.push({ rect: word, on: true });
+  }
+}
+
+const overWord = (p: Point) => !!smart && [...smart.picks.map((k) => k.rect), ...smart.words].some((r) => inside(p, r));
+
+/** One op for the whole batch, so a single undo brings it all back. */
+function applySmart() {
+  if (!smart || smart.loading) return;
+  const rects = smart.picks.filter((k) => k.on).map((k) => k.rect);
+  smart = null;
+  if (rects.length) {
+    // Black box unless the user picked blur/pixelate first: safest for keys and passwords.
+    addRedaction({ tool: isRedact(tool) ? tool : "box", rects });
+  }
+  updateChrome();
+  renderUI();
+}
+
+function cancelSmart() {
+  smart = null;
+  updateChrome();
+  renderUI();
+}
+
+// ---------------------------------------------------------------- annotations
+
+function newNote(kind: Exclude<NoteKind, "text">, p: Point): Note {
+  if (kind === "arrow") return { kind, color, a: p, b: p };
+  if (kind === "step") return { kind, color, at: p };
+  return { kind, color, r: { x: p.x, y: p.y, w: 0, h: 0 } };
+}
+
+/** Text notes are typed into a real textarea at the click, then drawn into the image. */
+function openNoteInput(at: Point, idx = -1) {
+  const s = scale();
+  const old = notes[idx];
+  if (old) color = old.color;
+  editing = { at, idx };
+  noteInput.value = old?.kind === "text" ? old.text : "";
+  Object.assign(noteInput.style, { left: `${at.x / s}px`, top: `${at.y / s}px`, color, fontSize: `${FONT_PX}px` });
+  noteInput.hidden = false;
+  noteInput.focus();
+  drawNotes(); // hides the note being edited, so it isn't shown twice
+  updateChrome();
+}
+
+function commitNoteInput(keep = true) {
+  if (!editing) return;
+  const { at, idx } = editing;
+  const text = noteInput.value.replace(/\s+$/, "");
+  editing = null;
+  noteInput.hidden = true;
+  const old = notes[idx];
+  const unchanged = old?.kind === "text" ? old.text === text && old.color === color : !text;
+  if (keep && !unchanged) {
+    snapshot();
+    if (!text) notes.splice(idx, 1);
+    else if (idx >= 0) notes[idx] = { kind: "text", color, at, text };
+    else notes.push({ kind: "text", color, at, text });
+    picked = -1;
+  }
+  drawNotes();
+  updateChrome();
+  renderUI();
+}
+
+function cycleColor() {
+  color = COLORS[(COLORS.indexOf(color) + 1) % COLORS.length];
+  if (editing) noteInput.style.color = color;
+  else if (notes[picked]) {
+    snapshot();
+    notes[picked] = { ...notes[picked], color };
+    drawNotes();
+  }
+  updateChrome();
+}
+
+function deletePicked() {
+  if (!notes[picked]) return;
+  snapshot();
+  notes.splice(picked, 1);
+  picked = -1;
+  drawNotes();
+  updateChrome();
+  renderUI();
+}
+
+// ---------------------------------------------------------------- loupe
+
+const CELLS = 15; // odd, so one pixel sits in the middle
+
+/** Magnifier + colour readout by the cursor while choosing an area or dragging an edge. */
+let loupeOn = false; // per capture; Z toggles
+
+function updateLoupe(p: Point | null) {
+  lastPoint = p;
+  // Off unless asked for (Z): an always-on magnifier got in the way.
+  const show = loupeOn && !!p && !!original && !smart && (!sel || drag?.kind === "new" || drag?.kind === "resize");
+  loupe.hidden = !show;
+  if (!show || !p || !original) return;
+  const s = scale();
+  const size = Math.round(120 * s);
+  if (loupeCanvas.width !== size) loupeCanvas.width = loupeCanvas.height = size;
+  const half = (CELLS - 1) / 2;
+  const cell = size / CELLS;
+  lctx.imageSmoothingEnabled = false;
+  lctx.fillStyle = "#000"; // beyond the screen edge
+  lctx.fillRect(0, 0, size, size);
+  lctx.drawImage(view, p.x - half, p.y - half, CELLS, CELLS, 0, 0, size, size);
+  // The picked pixel: dark + light outline so it shows on any colour.
+  lctx.lineWidth = Math.max(1, s);
+  lctx.strokeStyle = "#000";
+  lctx.strokeRect(half * cell, half * cell, cell, cell);
+  lctx.strokeStyle = "#fff";
+  lctx.strokeRect(half * cell - lctx.lineWidth, half * cell - lctx.lineWidth, cell + 2 * lctx.lineWidth, cell + 2 * lctx.lineWidth);
+
+  // Colour from the original screenshot: what's really on screen, not our marks.
+  const x = Math.min(W - 1, p.x);
+  const y = Math.min(H - 1, p.y);
+  const i = (y * W + x) * 4;
+  const d = original.data;
+  hex = "#" + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+  $("loupe-hex").textContent = hex;
+  $("loupe-pos").textContent = `${x}, ${y}`;
+
+  // Bottom-right of the cursor; flip to the other side near screen edges.
+  const cx = p.x / s;
+  const cy = p.y / s;
+  const bw = loupe.offsetWidth;
+  const bh = loupe.offsetHeight;
+  loupe.style.left = `${cx + 20 + bw > window.innerWidth ? cx - 20 - bw : cx + 20}px`;
+  loupe.style.top = `${cy + 20 + bh > window.innerHeight ? cy - 20 - bh : cy + 20}px`;
+}
+
+async function copyHex() {
+  const shown = hex;
+  try {
+    await invoke("copy_text", { text: shown });
+    $("loupe-hex").textContent = "Copied ✓";
+    setTimeout(() => lastPoint && updateLoupe(lastPoint), 800);
+  } catch (e) {
+    console.error("[overlay] copy colour failed", e);
   }
 }
 
@@ -436,36 +914,84 @@ async function copyText() {
 
 function setTool(t: Tool) {
   tool = t;
+  picked = -1;
+  if (t !== "select") closeText(); // the Live Text layer would catch the drag
   updateChrome();
+  renderUI();
 }
 
 ui.addEventListener("mousedown", (e) => {
   if (e.button !== 0 || busy) return;
   const p = toPhys(e);
+  if (smart) {
+    smartClick(p);
+    updateChrome();
+    renderUI();
+    return;
+  }
+  if (editing) return void commitNoteInput(); // a click away finishes the text
   const editable = mode === "capture" && sel;
-  if (editable && tool !== "select" && inside(p, sel!)) {
+  const hit = editable && tool === "select" ? noteAt(vctx, notes, p, scale()) : -1;
+  if (editable && isNote(tool) && inside(p, sel!)) {
+    picked = -1;
+    if (tool === "text") {
+      e.preventDefault(); // keep focus in the textarea we're about to show
+      return openNoteInput(p);
+    }
+    snapshot();
+    notes.push(newNote(tool, p));
+    drawNotes();
+    if (tool !== "step") drag = { kind: "note", origin: p };
+  } else if (editable && isRedact(tool) && inside(p, sel!)) {
     drag = { kind: "op", origin: p };
     pendingOp = { x: p.x, y: p.y, w: 0, h: 0 };
   } else if (editable && tool === "select" && handleAt(p, sel!)) {
     drag = { kind: "resize", origin: p, start: { ...sel! }, handle: handleAt(p, sel!)! };
+  } else if (hit >= 0) {
+    picked = hit;
+    color = notes[hit].color;
+    snapshot(); // dropped on mouseup if it didn't actually move
+    drag = { kind: "notemove", origin: p, start: notes[hit] };
   } else if (editable && tool === "select" && inside(p, sel!)) {
+    picked = -1;
     drag = { kind: "move", origin: p, start: { ...sel! } };
   } else {
-    drag = { kind: "new", origin: p };
+    picked = -1;
+    drag = { kind: "new", origin: p, snap: sel ? null : hoverWin };
+    hoverWin = null;
     sel = { x: p.x, y: p.y, w: 0, h: 0 };
-    panel.hidden = true;
+    closeText();
   }
   updateChrome();
   renderUI();
 });
 
+ui.addEventListener("dblclick", (e) => {
+  if (mode !== "capture" || tool !== "select") return;
+  const i = noteAt(vctx, notes, toPhys(e), scale());
+  const n = notes[i];
+  if (n?.kind === "text") openNoteInput(n.at, i);
+});
+
 window.addEventListener("mousemove", (e) => {
   const p = toPhys(e);
+  updateLoupe(p);
+  if (!drag && !sel && original) {
+    const w = windows.find((r) => inside(p, r)) ?? null;
+    if (w !== hoverWin) {
+      hoverWin = w;
+      renderUI();
+    }
+  }
   if (!drag) {
     let cursor = "crosshair";
-    if (mode === "capture" && sel && tool === "select") {
+    if (smart) {
+      cursor = overWord(p) ? "pointer" : "default";
+    } else if (mode === "capture" && sel && tool === "select") {
       const h = handleAt(p, sel);
-      cursor = h ? CURSORS[h] : inside(p, sel) ? "move" : "crosshair";
+      cursor = h ? CURSORS[h] : inside(p, sel) || noteAt(vctx, notes, p, scale()) >= 0 ? "move" : "crosshair";
+    } else if (tool === "text" && sel && inside(p, sel)) {
+      cursor = "text";
     }
     ui.style.cursor = cursor;
     return;
@@ -491,6 +1017,15 @@ window.addEventListener("mousemove", (e) => {
     sel = rectFrom({ x: x0, y: y0 }, { x: x1, y: y1 });
   } else if (drag.kind === "op" && sel) {
     pendingOp = clampTo(rectFrom(drag.origin, p), sel);
+  } else if (drag.kind === "note" && sel) {
+    const n = notes[notes.length - 1];
+    const q = { x: Math.max(sel.x, Math.min(sel.x + sel.w, p.x)), y: Math.max(sel.y, Math.min(sel.y + sel.h, p.y)) };
+    if (n.kind === "arrow") n.b = q;
+    else if (n.kind === "rect" || n.kind === "mark") n.r = rectFrom(drag.origin, q);
+    drawNotes();
+  } else if (drag.kind === "notemove") {
+    notes[picked] = moved(drag.start, dx, dy);
+    drawNotes();
   }
   updateChrome();
   renderUI();
@@ -501,22 +1036,26 @@ window.addEventListener("mouseup", () => {
   const d = drag;
   drag = null;
   if (d.kind === "new") {
-    if (!sel || sel.w < MIN_SIZE || sel.h < MIN_SIZE) {
-      sel = null;
-    } else if (mode === "text") {
+    // A click (no real drag) on a window selects that window.
+    if (!sel || sel.w < MIN_SIZE || sel.h < MIN_SIZE) sel = d.snap ? { ...d.snap } : null;
+    if (sel && mode === "text") {
+      loupe.hidden = true;
       renderUI();
       grabText();
       return;
     }
   }
-  if (d.kind === "op" && pendingOp && tool !== "select") {
-    if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) {
-      const op: Op = { tool, rect: pendingOp };
-      ops.push(op);
-      applyOp(op);
-    }
+  updateLoupe(lastPoint);
+  if (d.kind === "op" && pendingOp && isRedact(tool)) {
+    if (pendingOp.w >= MIN_SIZE && pendingOp.h >= MIN_SIZE) addRedaction({ tool, rects: [pendingOp] });
     pendingOp = null;
   }
+  if (d.kind === "note" && isTiny(notes[notes.length - 1], scale())) {
+    notes.pop(); // an accidental click with a drag tool
+    history.pop();
+    drawNotes();
+  }
+  if (d.kind === "notemove" && JSON.stringify(notes[picked]) === JSON.stringify(d.start)) history.pop(); // just a click
   updateChrome();
   renderUI();
 });
@@ -528,26 +1067,55 @@ window.addEventListener("contextmenu", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
-  if (e.target === textOut) {
-    if (e.key === "Escape") {
-      panel.hidden = true;
-      e.preventDefault();
-    }
-    return; // let the textarea handle typing, Ctrl+C, etc.
+  if (e.target === noteInput) {
+    if (e.key === "Escape") commitNoteInput(false);
+    else if (e.key === "Enter" && !e.shiftKey) commitNoteInput();
+    else return; // typing
+    return void e.preventDefault();
+  }
+  if (e.target === textOut && e.key !== "Escape") return; // let the textarea handle typing, Ctrl+C, etc.
+  if (smart) {
+    if (e.key === "Escape") cancelSmart();
+    if (e.key === "Enter") applySmart();
+    return void e.preventDefault();
+  }
+  if (e.key === "Escape" && !panel.hidden) {
+    closeText();
+    updateChrome();
+    return void e.preventDefault();
   }
   if (e.key === "Escape") return void close();
+  if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.altKey && !e.metaKey && (!sel || drag)) {
+    loupeOn = !loupeOn;
+    updateLoupe(lastPoint);
+    updateChrome();
+    return void e.preventDefault();
+  }
+  if (!loupe.hidden && e.key.toLowerCase() === "c" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    copyHex();
+    return void e.preventDefault();
+  }
   if (mode !== "capture" || !sel || sel.w < MIN_SIZE) return;
 
   const k = e.key.toLowerCase();
   const handled = (() => {
     if (e.ctrlKey && k === "z") return undo(), true;
-    if (e.ctrlKey && k === "c") return finish("copy"), true;
+    // With Live Text selected, Ctrl+C copies that text (see the copy listener), not the image.
+    if (e.ctrlKey && k === "c") return getSelection()?.isCollapsed === false ? false : (finish("copy"), true);
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
     if (k === "enter") return finish("both"), true;
-    const tools: Record<string, Tool> = { v: "select", b: "blur", p: "pixelate", r: "box" };
+    if ((k === "delete" || k === "backspace") && notes[picked]) return deletePicked(), true;
+    if (k === "c") return cycleColor(), true;
+    if (k === "f") return pin(), true;
+    if (k === "l") return scrollCapture(), true;
+    const tools: Record<string, Tool> = {
+      v: "select", b: "blur", p: "pixelate", r: "box",
+      a: "arrow", o: "rect", h: "mark", w: "text", n: "step",
+    };
     if (tools[k]) return setTool(tools[k]), true;
     if (k === "t") return extractText(), true;
+    if (k === "s") return startSmart(), true;
     return false;
   })();
   if (handled) e.preventDefault();
@@ -560,6 +1128,10 @@ toolbar.addEventListener("click", (e) => {
   switch (btn.dataset.action) {
     case "undo": return undo();
     case "ocr": return void extractText();
+    case "smart": return void startSmart();
+    case "color": return cycleColor();
+    case "pin": return void pin();
+    case "scroll": return void scrollCapture();
     case "copy":
     case "save":
     case "both":
@@ -583,14 +1155,27 @@ toolbar.addEventListener("mousedown", (e) => {
   hideTip();
 });
 panel.addEventListener("mousedown", (e) => e.stopPropagation());
+smartbar.addEventListener("mousedown", (e) => e.stopPropagation());
+noteInput.addEventListener("mousedown", (e) => e.stopPropagation());
+noteInput.addEventListener("blur", () => commitNoteInput()); // e.g. clicking Copy while typing
+$("smart-cancel").addEventListener("click", cancelSmart);
+smartApply.addEventListener("click", applySmart);
 
-$("text-close").addEventListener("click", () => (panel.hidden = true));
-$("text-copy").addEventListener("click", copyText);
+$("text-close").addEventListener("click", () => {
+  closeText();
+  updateChrome();
+});
+$("text-copy").addEventListener("click", () => copyValue(textOut.value));
+$("text-ai").addEventListener("click", aiReread);
 
 // ---------------------------------------------------------------- wiring
 
 const win = getCurrentWebviewWindow();
 win.listen<OpenPayload>("overlay:open", (e) => open(e.payload));
 win.listen("overlay:reset", reset);
+win.listen<[number, number, number, number][]>("overlay:windows", (e) => {
+  windows = e.payload.map(([x, y, w, h]) => ({ x, y, w, h }));
+});
+document.addEventListener("mouseleave", () => updateLoupe(null));
 // In case the open event fired before this page finished loading.
 invoke<OpenPayload | null>("overlay_pending").then((p) => p && open(p));

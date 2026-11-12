@@ -47,7 +47,35 @@ fn get_or_create(app: &AppHandle, label: &str) -> Result<WebviewWindow, String> 
         .background_color(Color(0, 0, 0, 255))
         .build()
         .map_err(|e| e.to_string())
+        .inspect(no_window_animation)
 }
+
+/// Windows plays a pop-in on show and a fade on hide. On a full-screen frozen screenshot that
+/// reads as a glitch, so turn it off; the page does its own short fade of the dim layer.
+#[cfg(windows)]
+fn no_window_animation(win: &WebviewWindow) {
+    use windows::{
+        core::BOOL,
+        Win32::{
+            Foundation::HWND,
+            Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED},
+        },
+    };
+    if let Ok(h) = win.hwnd() {
+        let off = BOOL(1);
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                HWND(h.0 as _),
+                DWMWA_TRANSITIONS_FORCEDISABLED,
+                &off as *const BOOL as *const _,
+                std::mem::size_of::<BOOL>() as u32,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn no_window_animation(_: &WebviewWindow) {}
 
 /// Create one hidden overlay per monitor at startup so the first capture is fast too.
 pub fn warm_up(app: &AppHandle) {
@@ -60,6 +88,10 @@ pub fn warm_up(app: &AppHandle) {
 }
 
 pub fn start(app: &AppHandle, mode: Mode) {
+    // A scrolling capture is driving the mouse; a new overlay would land in its frames.
+    if crate::scroll::ACTIVE.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let state = app.state::<AppState>();
     {
         let mut session = state.session.lock().unwrap();
@@ -90,6 +122,7 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
         shots.push((x, y, img));
     }
     let capture_ms = t0.elapsed().as_millis();
+    let bounds: Vec<_> = shots.iter().map(|(x, y, img)| (*x, *y, img.width(), img.height())).collect();
 
     for (i, (x, y, img)) in shots.into_iter().enumerate() {
         let label = format!("{PREFIX}{i}");
@@ -121,7 +154,54 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
         monitors.len(),
         since_hotkey(app)
     );
+    // Window rects for snap-to-window. Sent after the frames, so they never slow the hotkey.
+    let app = app.clone();
+    std::thread::spawn(move || send_windows(&app, &bounds));
     Ok(())
+}
+
+/// Each overlay gets the visible windows on its monitor as `[x, y, w, h]` (monitor-relative
+/// physical px, clipped to the monitor), top-most first, so hovering can outline one.
+fn send_windows(app: &AppHandle, monitors: &[(i32, i32, u32, u32)]) {
+    let t = Instant::now();
+    let me = std::process::id();
+    // List order is z-order. Skip title/app_name (slow) and our own overlays.
+    let wins: Vec<(i32, i32, i32, i32)> = xcap::Window::all()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|w| {
+            if w.pid().ok()? == me || w.is_minimized().ok()? {
+                return None;
+            }
+            let (x, y) = (w.x().ok()?, w.y().ok()?);
+            Some((x, y, x + w.width().ok()? as i32, y + w.height().ok()? as i32))
+        })
+        .collect();
+    for (i, &(mx, my, mw, mh)) in monitors.iter().enumerate() {
+        let rects = clip_to_monitor(&wins, (mx, my, mw, mh));
+        let _ = app.emit_to(EventTarget::webview_window(format!("{PREFIX}{i}")), "overlay:windows", rects);
+    }
+    println!("[capture] {} window rects in {} ms", wins.len(), t.elapsed().as_millis());
+}
+
+/// Window edges (left, top, right, bottom) -> `[x, y, w, h]` inside one monitor. Drops slivers
+/// and the tiny hidden helper windows some apps park at (0, 0) (22x22 seen in the wild).
+fn clip_to_monitor(wins: &[(i32, i32, i32, i32)], (mx, my, mw, mh): (i32, i32, u32, u32)) -> Vec<[i32; 4]> {
+    wins.iter()
+        .filter_map(|&(l, t, r, b)| {
+            let (l, t) = (l.max(mx), t.max(my));
+            let (r, b) = (r.min(mx + mw as i32), b.min(my + mh as i32));
+            (r - l >= 40 && b - t >= 40).then_some([l - mx, t - my, r - l, b - t])
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[test]
+fn windows_clip_to_their_monitor() {
+    // Second monitor at x=1920. A window straddling both, one off it, one too thin, one tiny.
+    let wins = [(1800, 100, 2200, 500), (0, 0, 800, 600), (2000, 0, 2010, 300), (1920, 0, 1942, 22)];
+    assert_eq!(clip_to_monitor(&wins, (1920, 0, 1920, 1080)), vec![[0, 100, 280, 400]]);
 }
 
 /// Overlay asks on load whether a frame is already waiting (covers a window that was
@@ -202,7 +282,8 @@ pub fn close(app: &AppHandle) {
     *state.session.lock().unwrap() = None;
     state.frames.lock().unwrap().clear();
     for w in overlay_windows(app) {
-        let _ = app.emit_to(EventTarget::webview_window(w.label()), "overlay:reset", ());
+        // Hide first: the reset shrinks the canvases, which flashed black while still visible.
         let _ = w.hide();
+        let _ = app.emit_to(EventTarget::webview_window(w.label()), "overlay:reset", ());
     }
 }

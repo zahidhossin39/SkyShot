@@ -1,0 +1,231 @@
+/* Shared tokens with Settings (theme.css); names below map onto them. */
+@import "./theme.css";
+
+:root {
+  --card: var(--panel);
+  --border: var(--line);
+  --star: #eab308;
+  --mark: #fde68a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mark: #854d0e;
+  }
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 560px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.search svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+#q {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+}
+
+#count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  padding: 18px 20px 28px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  /* Checkerboard-free neutral, so screenshots with white edges still read as a picture. */
+  background: color-mix(in srgb, var(--muted) 12%, var(--card));
+  cursor: pointer;
+}
+
+.thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px 2px 12px;
+  font-size: 13px;
+}
+
+.meta time {
+  font-weight: 500;
+}
+
+.meta .dims {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.star {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.star[aria-pressed="true"] {
+  color: var(--star);
+}
+
+.star:hover {
+  background: var(--key-bg);
+}
+
+.snip {
+  margin: 2px 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.snip mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  margin-top: auto;
+  padding: 8px 10px 10px;
+}
+
+.actions button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--key-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+
+.actions button:hover {
+  border-color: var(--muted);
+}
+
+.actions .del {
+  margin-left: auto;
+}
+
+.actions .del.confirm {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#empty {
+  margin: 80px auto;
+  max-width: 360px;
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #18181b;
+  color: #f4f4f5;
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
+}

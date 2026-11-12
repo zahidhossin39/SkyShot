@@ -41,6 +41,22 @@ canvas {
   cursor: crosshair;
 }
 
+/* Open: the window appears showing only the frozen screenshot (identical to the real screen),
+   then the dim and the hint fade in. Close: the same in reverse before the window hides. */
+body > *:not(#view) {
+  transition: opacity 140ms var(--ease-out);
+}
+
+body.pre > *:not(#view) {
+  opacity: 0;
+  transition: none;
+}
+
+body.leaving > *:not(#view) {
+  opacity: 0;
+  transition-duration: 110ms;
+}
+
 /* ---------------------------------------------------------------- hint + size */
 
 #hint {
@@ -83,9 +99,42 @@ canvas {
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------- loupe */
+
+#loupe {
+  position: fixed;
+  width: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bar-bg);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+#loupe-canvas {
+  position: static;
+  display: block;
+  width: 120px;
+  height: 120px;
+}
+
+#loupe-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 7px;
+  color: var(--bar-fg);
+  font: 11px/1.3 "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+#loupe-pos {
+  color: var(--bar-muted);
+}
+
 /* ---------------------------------------------------------------- toolbar */
 
-#toolbar {
+#toolbar,
+#smartbar {
   position: fixed;
   display: flex;
   align-items: center;
@@ -95,6 +144,25 @@ canvas {
   background: var(--bar-bg);
   box-shadow: var(--shadow);
   animation: rise 160ms var(--ease-out);
+}
+
+#smart-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 6px;
+  color: var(--bar-muted);
+  white-space: nowrap;
+}
+
+#smartbar.loading #smart-status::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bar-line);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
 }
 
 #toolbar .group {
@@ -245,7 +313,80 @@ button svg .faint {
 }
 
 .panel-foot {
-  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Smart actions: links, emails, phones found in the text. */
+#text-actions {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+button.chip {
+  min-width: 0;
+  max-width: 150px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--bar-line);
+  border-radius: 999px;
+  color: #9cc3ff;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* Colour button: the current annotation colour. */
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+
+/* Text note being typed. Same font/spacing as annotate.ts draws it, so nothing jumps on Enter. */
+#note-input {
+  position: fixed;
+  min-width: 2ch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 1px dashed var(--accent);
+  outline-offset: 3px;
+  background: transparent;
+  font-family: "Segoe UI", sans-serif;
+  font-weight: 600;
+  line-height: 1.25;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content; /* grow with the text (Chromium / WebView2) */
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ---------------------------------------------------------------- live text */
+
+/* Invisible words over the image: only the selection highlight shows. */
+#livetext {
+  position: fixed;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#livetext span {
+  position: absolute;
+  color: transparent;
+  line-height: 1;
+  white-space: pre;
+  transform-origin: 0 0;
+  font-family: "Segoe UI", sans-serif;
+}
+
+#livetext ::selection {
+  background: rgba(59, 130, 246, 0.4);
 }
 
 #text-status {
@@ -307,6 +448,7 @@ button svg .faint {
 
 @media (prefers-reduced-motion: reduce) {
   #toolbar,
+  #smartbar,
   #tip,
   #textpanel {
     animation: none;

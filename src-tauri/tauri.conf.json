@@ -1,18 +1,22 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Screenshot App",
+  "productName": "Shutter",
   "version": "0.1.0",
   "identifier": "com.zaid-hossain.screenshot-app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1430",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/history/**"]
+      }
     }
   },
   "bundle": {

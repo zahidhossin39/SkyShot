@@ -1,0 +1,132 @@
+// History window: every finished capture, searchable by the text in it.
+
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { matches, snippet } from "./search";
+
+type Entry = { id: string; created: number; width: number; height: number; text: string; starred: boolean };
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const grid = $("grid");
+const q = $<HTMLInputElement>("q");
+const onlyStarred = $<HTMLInputElement>("only-starred");
+const count = $("count");
+const empty = $("empty");
+const toast = $("toast");
+
+let dir = "";
+let entries: Entry[] = [];
+let toastTimer = 0;
+
+function say(text: string) {
+  toast.textContent = text;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => (toast.hidden = true), 1400);
+}
+
+const DAY = 86_400_000;
+function when(ms: number) {
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const today = new Date().setHours(0, 0, 0, 0);
+  if (ms >= today) return `Today ${time}`;
+  if (ms >= today - DAY) return `Yesterday ${time}`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return `${d.toLocaleDateString([], { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" })} ${time}`;
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}, ...kids: (Node | string)[]) {
+  const e = Object.assign(document.createElement(tag), props);
+  e.append(...kids);
+  return e;
+}
+
+function card(e: Entry, query: string) {
+  const img = el("img", { loading: "lazy", alt: "", src: convertFileSrc(`${dir}\\${e.id}.thumb.png`) });
+  const thumb = el("button", { className: "thumb", title: "Copy image" }, img);
+  thumb.onclick = () => copy(e);
+
+  const star = el("button", { className: "star", textContent: e.starred ? "★" : "☆", title: e.starred ? "Starred: kept forever" : "Star to keep forever" });
+  star.setAttribute("aria-pressed", String(e.starred));
+  star.setAttribute("aria-label", "Star");
+  star.onclick = async () => {
+    await invoke("history_star", { id: e.id, starred: !e.starred });
+    e.starred = !e.starred;
+    render();
+  };
+
+  const meta = el("div", { className: "meta" }, el("time", { textContent: when(e.created) }), el("span", { className: "dims", textContent: `${e.width}×${e.height}` }), star);
+
+  const parts = query ? snippet(e.text, query) : null;
+  const snip = parts && el("p", { className: "snip" }, parts[0], el("mark", { textContent: parts[1] }), parts[2]);
+
+  const copyBtn = el("button", { textContent: "Copy" });
+  copyBtn.onclick = () => copy(e);
+  const reveal = el("button", { textContent: "Show in folder" });
+  reveal.onclick = () => invoke("history_reveal", { id: e.id }).catch((err) => say(String(err)));
+  // Two clicks to delete, without a dialog: the first arms it for 3 s.
+  const del = el("button", { className: "del", textContent: "Delete" });
+  let armed = 0;
+  del.onclick = async () => {
+    if (!armed) {
+      del.textContent = "Sure?";
+      del.classList.add("confirm");
+      armed = window.setTimeout(() => {
+        armed = 0;
+        del.textContent = "Delete";
+        del.classList.remove("confirm");
+      }, 3000);
+      return;
+    }
+    clearTimeout(armed);
+    await invoke("history_delete", { id: e.id });
+    entries = entries.filter((x) => x.id !== e.id);
+    render();
+  };
+
+  return el("article", { className: "card" }, thumb, meta, ...(snip ? [snip] : []), el("div", { className: "actions" }, copyBtn, reveal, del));
+}
+
+async function copy(e: Entry) {
+  try {
+    await invoke("history_copy", { id: e.id });
+    say("Image copied");
+  } catch (err) {
+    say(String(err));
+  }
+}
+
+function render() {
+  const query = q.value.trim();
+  const shown = entries.filter((e) => (!onlyStarred.checked || e.starred) && matches(e.text, query));
+  grid.replaceChildren(...shown.map((e) => card(e, query)));
+  count.textContent = query || onlyStarred.checked ? `${shown.length} of ${entries.length}` : `${entries.length} shots`;
+  empty.hidden = shown.length > 0;
+  empty.textContent = entries.length
+    ? "Nothing matches. Search looks at the text in each screenshot (hidden or redacted text isn't included)."
+    : "No screenshots yet. Everything you copy, save or pin shows up here, searchable by its text.";
+}
+
+async function load() {
+  const view = await invoke<{ dir: string; entries: Entry[] }>("history_list");
+  dir = view.dir;
+  entries = view.entries;
+  render();
+}
+
+q.addEventListener("input", render);
+onlyStarred.addEventListener("change", render);
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey && e.key.toLowerCase() === "f") || (e.key === "/" && document.activeElement !== q)) {
+    e.preventDefault();
+    q.focus();
+    q.select();
+  }
+  if (e.key === "Escape" && q.value) {
+    q.value = "";
+    render();
+  }
+});
+listen("history:changed", load);
+load().then(() => q.focus());

@@ -10,25 +10,27 @@ export default defineConfig(() => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // Two pages: the capture overlay (one window per monitor) and settings.
+  // Pages: the capture overlay (one window per monitor), settings, pinned shots, history.
   build: {
     rollupOptions: {
       input: {
         overlay: "overlay.html",
         settings: "settings.html",
+        pin: "pin.html",
+        history: "history.html",
       },
     },
   },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    port: 1430, // not Tauri's default 1420: another local project (Silent Voice) uses it
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: 1431,
         }
       : undefined,
     watch: {

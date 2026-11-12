@@ -11,6 +11,10 @@ pub struct Settings {
     pub hotkey_text: String,
     /// Empty = default folder (Pictures\Screenshots).
     pub save_dir: String,
+    /// How long history keeps unstarred shots, in days. 0 = forever.
+    pub history_days: u32,
+    /// AI re-read provider: "claude" or "gemini". Its key is in Credential Manager (ai.rs).
+    pub ai_provider: String,
 }
 
 impl Default for Settings {
@@ -20,6 +24,8 @@ impl Default for Settings {
             // Not Shift+PrtSc: Lightshot owns it, so it fails to register while Lightshot runs.
             hotkey_text: "Ctrl+Shift+PrintScreen".into(),
             save_dir: String::new(),
+            history_days: 30,
+            ai_provider: "claude".into(),
         }
     }
 }
