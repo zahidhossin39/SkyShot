@@ -1,4 +1,4 @@
-# Screenshot App
+# Shutter (screenshot app)
 
 Read `SPEC.md` first. It holds every product decision, the roadmap (v1/v2/v3) and spike results.
 
@@ -11,10 +11,10 @@ Read `SPEC.md` first. It holds every product decision, the roadmap (v1/v2/v3) an
 **v1: all features built.** Owner confirmed capture + blur + copy work. Next phase: **v2, then v3** (owner's call). Install/testing/push are deferred.
 
 Deferred v1 items:
-- Installer builds (`npm run tauri build`, NSIS only, ~1.7 MB). Not installed yet; waiting on a final app name.
+- Installer builds (`npm run tauri build`, NSIS only, ~1.7 MB). Not installed yet.
 - Untested by hand: Save / Save as, Ctrl+Shift+PrtSc text grab, hotkey rebinding, autostart, multi-monitor, 125/150% DPI.
 - Push to GitHub: needs owner OK + co-author answer.
-- App name undecided. Shortlist (checked, no app found): Stillpane (top pick), Lensnip, Vitrashot, Glimpshot, Snaptic, Scrimshot. Taken: Veilshot, Hushshot, Cloakshot, Bokashi, Frisket (all screenshot-redaction tools), Snapture, Captureist, Pixsnip.
+- App name: **Shutter** (owner, 2026-11-12). Only the visible name changed; bundle id, exe name and the AI-key vault name stay `screenshot-app` so settings, History and a saved key survive.
 
 v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built: Smart Redact, Live Text + Smart actions, annotations. They're only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser). Then merge to main (owner's call). v3 is underway on the same branch, in this order: pin to screen (done) -> zoom loupe + colour picker + window snap (done) -> searchable history (done) -> AI re-read (done; a real transcription still needs the owner's key) -> scrolling capture (done). v3 is complete; everything still needs the owner's hand test. Since then: the capture screen opens and closes without flicker and stays dim before you select (Lightshot-style), and scrolling capture works through the whole of zaidhossain.com (see SPEC.md).
 

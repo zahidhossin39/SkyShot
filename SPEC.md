@@ -1,4 +1,4 @@
-# Screenshot App — Spec
+# Shutter — Spec
 
 Single source of truth for this project. Decisions here came from a grilling session on 2026-10-28.
 If a decision changes, update this file in the same commit.
