@@ -261,14 +261,15 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
             let (cx, cy) = (mx + (x + w / 2) as i32, my + (y + h / 2) as i32);
             scroll::move_cursor(cx, cy);
             // No "hands off" toast here: it slid into the area being captured and got stitched in.
-            scroll::run(grab, |n| {
+            let go_on = |n| {
                 if scroll::user_interrupted(cx, cy) {
                     return false;
                 }
                 scroll::wheel(n);
-                std::thread::sleep(std::time::Duration::from_millis(scroll::SETTLE_MS));
+                std::thread::sleep(std::time::Duration::from_millis(60)); // let the scroll start
                 !scroll::user_interrupted(cx, cy)
-            })
+            };
+            scroll::run_with(grab, go_on, scroll::SETTLE_MS)
         })();
         // Put the cursor back, unless the user already took it.
         let mon_origin = xcap::Monitor::all().ok().and_then(|m| m.into_iter().nth(idx)).and_then(|m| Some((m.x().ok()?, m.y().ok()?)));

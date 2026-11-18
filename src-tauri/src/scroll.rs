@@ -9,9 +9,44 @@ use image::RgbaImage;
 const MAX_STEPS: usize = 150; // ~2 min worst case at ~0.8 s per step
 const MAX_HEIGHT: u32 = 20_000;
 
-/// Wait after each scroll before grabbing. Smooth scrolling and scroll-triggered fade-ins need
-/// ~0.5 s; at 350 ms the stitch caught images half faded in and headlines half revealed.
+/// Longest wait after each scroll for the area to stop changing. Smooth scrolling and
+/// scroll-triggered fade-ins need ~0.5 s; at 350 ms the stitch caught images half faded in.
 pub const SETTLE_MS: u64 = 700;
+/// Grab again this often while waiting for the area to settle.
+const POLL_MS: u64 = 40;
+
+/// Share of row-strips alike between two frames at the same place (a blinking caret or a small
+/// spinner doesn't count as "still changing").
+fn alike(a: &[Vec<(u64, bool)>], b: &[Vec<(u64, bool)>]) -> bool {
+    let pairs = a.iter().zip(b).flat_map(|(p, n)| p.iter().zip(n));
+    let (same, all) = pairs.fold((0u32, 0u32), |(s, t), (p, n)| (s + (p.0.abs_diff(n.0) <= SIG_TOLERANCE) as u32, t + 1));
+    same as f32 >= 0.995 * all.max(1) as f32
+}
+
+/// Grab until the area stops changing (two grabs in a row alike) after moving away from
+/// `before`, or `max_ms` passes. A fixed 700 ms wait made every step slow when most apps settle
+/// in ~100 ms; fades and smooth scrolling still get the full wait. "Moved away from before"
+/// keeps a scroll that hasn't started yet from passing as the end of the page.
+fn settled(
+    grab: &mut impl FnMut() -> Result<RgbaImage, String>,
+    before: &[Vec<(u64, bool)>],
+    max_ms: u64,
+) -> Result<(RgbaImage, Vec<Vec<(u64, bool)>>), String> {
+    let start = std::time::Instant::now();
+    let mut frame = grab()?;
+    let mut sig = rows(&frame);
+    while start.elapsed().as_millis() < max_ms as u128 {
+        std::thread::sleep(std::time::Duration::from_millis(POLL_MS));
+        let next = grab()?;
+        let next_sig = rows(&next);
+        let calm = alike(&sig, &next_sig) && !alike(&next_sig, before);
+        (frame, sig) = (next, next_sig);
+        if calm {
+            break;
+        }
+    }
+    Ok((frame, sig))
+}
 
 /// A row's signature: average of R+G+B per pixel, x16 for precision. Not an exact hash, because
 /// browsers re-render text a touch differently after a scroll (~5% of pixels off by 1).
@@ -189,11 +224,19 @@ fn next_notches(area_h: u32, max_per_notch: f32) -> i32 {
     ((area_h as f32 * 0.35 / max_per_notch) as i32).clamp(1, 15)
 }
 
+/// `run_with` without waiting for the area to settle (fake pages are still the moment they move).
+#[cfg(test)]
+fn run(grab: impl FnMut() -> Result<RgbaImage, String>, scroll: impl FnMut(i32) -> bool) -> Result<RgbaImage, String> {
+    run_with(grab, scroll, 0)
+}
+
 /// Runs the whole capture. `grab` captures the area; `scroll(n)` scrolls `n` notches and
-/// returns false if the user wants to stop (what's stitched so far is kept).
-pub fn run(
+/// returns false if the user wants to stop (what's stitched so far is kept). After each scroll
+/// it waits up to `settle_ms` for the area to stop changing.
+pub fn run_with(
     mut grab: impl FnMut() -> Result<RgbaImage, String>,
     mut scroll: impl FnMut(i32) -> bool,
+    settle_ms: u64,
 ) -> Result<RgbaImage, String> {
     let first = grab()?;
     let (width, area_h) = first.dimensions();
@@ -213,8 +256,7 @@ pub fn run(
             println!("[scroll] stopped by the user");
             break;
         }
-        let frame = grab()?;
-        let next = rows(&frame);
+        let (frame, next) = settled(&mut grab, &prev, settle_ms)?;
         let mut shift = find_shift(&prev, &next);
         let guess = (notches as f32 * median(&per_notch)).round() as usize;
         let mut fit = None;
@@ -356,12 +398,12 @@ mod tests {
         let grab = || Ok(image::imageops::crop_imm(&mon.capture_image().unwrap(), x, y, w, h).to_image());
         let t = std::time::Instant::now();
         move_cursor((x + w / 2) as i32, (y + h / 2) as i32);
-        let img = run(grab, |n| {
+        let go_on = |n| {
             wheel(n);
-            std::thread::sleep(std::time::Duration::from_millis(SETTLE_MS));
+            std::thread::sleep(std::time::Duration::from_millis(60));
             true
-        })
-        .unwrap();
+        };
+        let img = run_with(grab, go_on, SETTLE_MS).unwrap();
         println!("stitched {}x{} in {} ms", img.width(), img.height(), t.elapsed().as_millis());
         img.save(p[4]).unwrap();
     }
@@ -533,6 +575,22 @@ mod tests {
             RgbaImage::from_fn(20, 100, |x, y| if x < 5 || x >= 15 { image::Rgba([255; 4]) } else { *page.get_pixel(x, y) })
         };
         assert_eq!(fixed_bottom(&rows(&framed(0)), &rows(&framed(30))), 0);
+    }
+
+    /// Waits through "hasn't moved yet" and "still moving", and takes the first calm frame.
+    #[test]
+    fn waits_until_the_area_has_moved_and_settled() {
+        let before = page_frame(0, 100, 0);
+        let seq = [page_frame(0, 100, 0), page_frame(0, 100, 0), page_frame(20, 100, 0), page_frame(35, 100, 0), page_frame(40, 100, 0), page_frame(40, 100, 0)];
+        let i = std::cell::Cell::new(0);
+        let mut grab = || {
+            i.set(i.get() + 1);
+            Ok(seq[(i.get() - 1).min(seq.len() - 1)].clone())
+        };
+        let (frame, _) = settled(&mut grab, &rows(&before), 5_000).unwrap();
+        assert_eq!(frame, page_frame(40, 100, 0));
+        assert_eq!(i.get(), 6, "stopped at the second calm grab, not at the unmoved ones");
+        let (_, _) = settled(&mut || Ok(before.clone()), &rows(&before), 100).unwrap(); // end of page: gives up after max_ms
     }
 
     #[test]
