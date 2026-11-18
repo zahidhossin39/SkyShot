@@ -1,7 +1,9 @@
-// Annotations: arrows, boxes, highlighter, text and numbered steps, drawn over the
+// Annotations: pen strokes, arrows, boxes, highlighter, text and numbered steps, drawn over the
 // screenshot (always above redactions). Geometry is physical pixels like the rest of the
 // overlay; `s` is physical px per CSS px, so strokes look the same at any display scaling.
 // Pure apart from the canvas it's given, so hit-testing is unit-tested (annotate.test.ts).
+
+import { strokePath, type InkPoint } from "./ink.ts";
 
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -9,7 +11,9 @@ export type Note =
   | { kind: "arrow"; color: string; a: Point; b: Point }
   | { kind: "rect" | "mark"; color: string; r: Rect }
   | { kind: "text"; color: string; at: Point; text: string }
-  | { kind: "step"; color: string; at: Point };
+  | { kind: "step"; color: string; at: Point }
+  // size: CSS px. pen: real stylus pressure. shape: snapped to a clean line/box/ellipse.
+  | { kind: "pen"; color: string; size: number; pts: InkPoint[]; pen: boolean; shape?: boolean };
 export type NoteKind = Note["kind"];
 
 export const COLORS = ["#ef4444", "#facc15", "#22c55e", "#3b82f6", "#18181b"];
@@ -68,6 +72,16 @@ export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: 
       c.textBaseline = "middle";
       c.fillText(String(step), n.at.x, n.at.y + s);
       break;
+    case "pen":
+      if (n.shape) {
+        c.lineWidth = n.size * s * 0.8; // matches mouse ink, which thins a little with speed
+        c.beginPath();
+        n.pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+        c.stroke();
+      } else {
+        c.fill(new Path2D(strokePath(n.pts, n.size * s, n.pen)));
+      }
+      break;
     case "text":
       c.font = textFont(s);
       c.textBaseline = "top";
@@ -92,6 +106,14 @@ export function noteBox(c: CanvasRenderingContext2D, n: Note, s: number): Rect {
     case "step": {
       const r = STEP_R * s;
       return { x: n.at.x - r, y: n.at.y - r, w: 2 * r, h: 2 * r };
+    }
+    case "pen": {
+      const r = (n.size * s) / 2;
+      const xs = n.pts.map((p) => p[0]);
+      const ys = n.pts.map((p) => p[1]);
+      const x = Math.min(...xs) - r;
+      const y = Math.min(...ys) - r;
+      return { x, y, w: Math.max(...xs) + r - x, h: Math.max(...ys) + r - y };
     }
     case "text": {
       c.font = textFont(s);
@@ -119,6 +141,15 @@ export function noteAt(c: CanvasRenderingContext2D, notes: Note[], p: Point, s: 
       if (distToSegment(p, n.a, n.b) <= t) return i;
       continue;
     }
+    if (n.kind === "pen") {
+      // Near the ink itself, not anywhere in its bounding box (a circle shouldn't swallow clicks).
+      const at = (k: number) => ({ x: n.pts[k][0], y: n.pts[k][1] });
+      const reach = t + (n.size * s) / 2;
+      for (let k = 0; k < n.pts.length; k++) {
+        if (distToSegment(p, at(Math.max(0, k - 1)), at(k)) <= reach) return i;
+      }
+      continue;
+    }
     const r = noteBox(c, n, s);
     const inOuter = p.x >= r.x - t && p.x <= r.x + r.w + t && p.y >= r.y - t && p.y <= r.y + r.h + t;
     const inInner = p.x > r.x + t && p.x < r.x + r.w - t && p.y > r.y + t && p.y < r.y + r.h - t;
@@ -135,6 +166,8 @@ export function moved(n: Note, dx: number, dy: number): Note {
     case "rect":
     case "mark":
       return { ...n, r: { ...n.r, x: n.r.x + dx, y: n.r.y + dy } };
+    case "pen":
+      return { ...n, pts: n.pts.map(([x, y, p]) => [x + dx, y + dy, p]) };
     default:
       return { ...n, at: t(n.at) };
   }

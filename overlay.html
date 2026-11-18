@@ -23,11 +23,14 @@
     <!-- data-name / data-key / data-desc feed the hover tooltip (see overlay.ts). -->
     <div id="toolbar" hidden>
       <div class="group">
-        <button data-tool="select" data-name="Select" data-key="V" data-desc="Move or resize the selection. Click an arrow, box or text to move, recolour or delete it.">
+        <button data-tool="select" data-name="Select" data-key="V" data-desc="Move or resize the selection. Click a mark (drawing, arrow, box, text) to move, recolour or delete it.">
           <svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z" /></svg>
         </button>
       </div>
       <div class="group" role="group" aria-label="Annotate">
+        <button data-tool="pen" data-name="Draw" data-key="D" data-desc="Draw freely (pen tablets feel the pressure). Hold still at the end of a stroke to snap it into a clean line, circle or box, then keep dragging to resize. Shift draws a straight line.">
+          <svg viewBox="0 0 24 24"><path d="M4 20l1.2-4.8L15.5 4.9a1.6 1.6 0 0 1 2.3 0l1.3 1.3a1.6 1.6 0 0 1 0 2.3L8.8 18.8z" /><path d="M13.5 7l3.5 3.5" /></svg>
+        </button>
         <button data-tool="arrow" data-name="Arrow" data-key="A" data-desc="Drag to point at something.">
           <svg viewBox="0 0 24 24"><path d="M5 19L19 5M10 5h9v9" /></svg>
         </button>
@@ -45,6 +48,9 @@
         </button>
         <button data-action="color" data-name="Colour" data-key="C" data-desc="Change colour for new marks, or for the selected one.">
           <span class="swatch"></span>
+        </button>
+        <button data-action="size" data-name="Pen size" data-key="[ ]" data-desc="Thin, medium or thick, for new strokes or the selected one." hidden>
+          <span class="dot"></span>
         </button>
       </div>
       <div class="group" role="group" aria-label="Redact">

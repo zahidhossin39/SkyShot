@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { COLORS, drawNote, FONT_PX, isTiny, moved, noteAt, noteBox, type Note, type NoteKind, type Point, type Rect } from "./annotate";
 import { findActions, findSensitive, type Action, type Word } from "./detect";
+import { PEN_SIZES, recognize, resized, snapAngle, type Shape } from "./ink";
 
 type Mode = "capture" | "text";
 type RedactTool = "blur" | "pixelate" | "box";
@@ -26,7 +27,10 @@ type Drag =
   | { kind: "resize"; origin: Point; start: Rect; handle: Handle }
   | { kind: "op"; origin: Point }
   | { kind: "note"; origin: Point } // drawing the last note in `notes`
-  | { kind: "notemove"; origin: Point; start: Note };
+  | { kind: "notemove"; origin: Point; start: Note }
+  // Drawing the last note in `notes` with the pen. at: pointer now. still: where it last came to
+  // rest (for hold-to-snap). snap: the shape it snapped to, resized while you keep dragging.
+  | { kind: "pen"; origin: Point; at: Point; still: Point; straight?: boolean; snap?: { shape: Shape; from: Point } };
 
 const ACCENT = "#3b82f6";
 const MIN_SIZE = 3;
@@ -74,6 +78,7 @@ let live: { el: HTMLElement; text: string }[][] | null = null;
 let notes: Note[] = [];
 let picked = -1; // selected note, for move / delete / recolour
 let color = COLORS[0];
+let penSize = 1; // index into PEN_SIZES
 /** Text note being typed: where, and which note it replaces (-1 = new). */
 let editing: { at: Point; idx: number } | null = null;
 /** Undo snapshots. Covers redactions and every annotation change (add, move, edit, delete). */
@@ -346,6 +351,10 @@ function updateChrome() {
     );
     toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = history.length === 0;
     toolbar.querySelector<HTMLElement>(".swatch")!.style.background = color;
+    const sizeBtn = toolbar.querySelector<HTMLElement>('[data-action="size"]')!;
+    sizeBtn.hidden = tool !== "pen" && notes[picked]?.kind !== "pen";
+    const dot = sizeBtn.querySelector<HTMLElement>(".dot")!;
+    dot.style.width = dot.style.height = `${PEN_SIZES[penSize] + 2}px`;
     placeNear(toolbar, sel);
   }
   if (!panel.hidden && sel) placePanel();
@@ -360,6 +369,7 @@ const TOOL_HINTS: Record<Exclude<Tool, "select">, string> = {
   rect: "Drag to draw a box",
   mark: "Drag over text to highlight it",
   text: "Click to add text",
+  pen: `Draw freely${SEP}Hold still to snap to a line, circle or box${SEP}<kbd>Shift</kbd> straight${SEP}<kbd>[</kbd> <kbd>]</kbd> size`,
   step: "Click to add numbered steps (1, 2, 3…)",
 };
 
@@ -791,7 +801,7 @@ function cancelSmart() {
 
 // ---------------------------------------------------------------- annotations
 
-function newNote(kind: Exclude<NoteKind, "text">, p: Point): Note {
+function newNote(kind: Exclude<NoteKind, "text" | "pen">, p: Point): Note {
   if (kind === "arrow") return { kind, color, a: p, b: p };
   if (kind === "step") return { kind, color, at: p };
   return { kind, color, r: { x: p.x, y: p.y, w: 0, h: 0 } };
@@ -840,6 +850,28 @@ function cycleColor() {
     drawNotes();
   }
   updateChrome();
+}
+
+/** Pen size for new strokes, and for the selected stroke. */
+function setPenSize(i: number) {
+  penSize = Math.max(0, Math.min(PEN_SIZES.length - 1, i));
+  const n = notes[picked];
+  if (n?.kind === "pen" && n.size !== PEN_SIZES[penSize]) {
+    snapshot();
+    notes[picked] = { ...n, size: PEN_SIZES[penSize] };
+    drawNotes();
+    renderUI();
+  }
+  updateChrome();
+}
+
+/** Cursor = the pen tip: a dot of the stroke's size and colour, outlined for any background. */
+function penCursor() {
+  const d = PEN_SIZES[penSize] + 2;
+  const z = d + 6;
+  const c = z / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${z}" height="${z}"><circle cx="${c}" cy="${c}" r="${d / 2 + 1}" fill="none" stroke="rgba(0,0,0,.55)"/><circle cx="${c}" cy="${c}" r="${d / 2}" fill="${color}" stroke="#fff" stroke-width="1.2"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
 }
 
 function deletePicked() {
@@ -931,8 +963,9 @@ ui.addEventListener("mousedown", (e) => {
   }
   if (editing) return void commitNoteInput(); // a click away finishes the text
   const editable = mode === "capture" && sel;
+  if (editable && tool === "pen" && inside(p, sel!)) return; // the pen uses pointer events (below)
   const hit = editable && tool === "select" ? noteAt(vctx, notes, p, scale()) : -1;
-  if (editable && isNote(tool) && inside(p, sel!)) {
+  if (editable && isNote(tool) && tool !== "pen" && inside(p, sel!)) {
     picked = -1;
     if (tool === "text") {
       e.preventDefault(); // keep focus in the textarea we're about to show
@@ -950,6 +983,8 @@ ui.addEventListener("mousedown", (e) => {
   } else if (hit >= 0) {
     picked = hit;
     color = notes[hit].color;
+    const n = notes[hit];
+    if (n.kind === "pen") penSize = Math.max(0, PEN_SIZES.indexOf(n.size));
     snapshot(); // dropped on mouseup if it didn't actually move
     drag = { kind: "notemove", origin: p, start: notes[hit] };
   } else if (editable && tool === "select" && inside(p, sel!)) {
@@ -992,6 +1027,8 @@ window.addEventListener("mousemove", (e) => {
       cursor = h ? CURSORS[h] : inside(p, sel) || noteAt(vctx, notes, p, scale()) >= 0 ? "move" : "crosshair";
     } else if (tool === "text" && sel && inside(p, sel)) {
       cursor = "text";
+    } else if (tool === "pen" && mode === "capture" && sel && inside(p, sel)) {
+      cursor = penCursor();
     }
     ui.style.cursor = cursor;
     return;
@@ -1060,6 +1097,103 @@ window.addEventListener("mouseup", () => {
   renderUI();
 });
 
+// ---------------------------------------------------------------- pen
+// Pointer events, not mouse ones: they carry pen pressure and every sample the OS took between
+// frames (coalesced events), so a fast stroke stays a smooth curve instead of joined straight bits.
+
+const HOLD_MS = 500; // hold still this long to snap (Apple Markup / QuickShape feel)
+let holdTimer = 0;
+let redrawQueued = false;
+
+/** One redraw per frame, however many pointer samples arrive. */
+function redrawSoon() {
+  if (redrawQueued) return;
+  redrawQueued = true;
+  requestAnimationFrame(() => {
+    redrawQueued = false;
+    drawNotes();
+  });
+}
+
+const within = (p: Point, r: Rect): Point => ({ x: Math.max(r.x, Math.min(r.x + r.w, p.x)), y: Math.max(r.y, Math.min(r.y + r.h, p.y)) });
+
+function penNote() {
+  const n = notes[notes.length - 1];
+  return n?.kind === "pen" ? n : null;
+}
+
+/** (Re)start the hold timer: if the pointer stays put, the stroke snaps to a clean shape. */
+function armHold() {
+  clearTimeout(holdTimer);
+  holdTimer = window.setTimeout(() => {
+    const n = penNote();
+    if (drag?.kind !== "pen" || drag.snap || drag.straight || !n) return;
+    const shape = recognize(n.pts.map(([x, y]) => ({ x, y })), 40 * scale());
+    if (!shape) return;
+    n.pts = shape.pts.map((q) => [q.x, q.y, 0.5]);
+    n.shape = true;
+    drag.snap = { shape, from: drag.at };
+    drawNotes();
+  }, HOLD_MS);
+}
+
+ui.addEventListener("pointerdown", (e) => {
+  if (tool !== "pen" || e.button !== 0 || busy || smart || editing || mode !== "capture" || !sel) return;
+  const p = toPhys(e);
+  if (!inside(p, sel)) return; // outside the selection: mousedown starts a new one, as usual
+  e.preventDefault(); // this press is a stroke: no mousedown
+  ui.setPointerCapture(e.pointerId);
+  snapshot();
+  picked = -1;
+  const pen = e.pointerType === "pen";
+  notes.push({ kind: "pen", color, size: PEN_SIZES[penSize], pts: [[p.x, p.y, pen ? e.pressure : 0.5]], pen });
+  drag = { kind: "pen", origin: p, at: p, still: p };
+  armHold();
+  drawNotes();
+  updateChrome();
+  renderUI();
+});
+
+ui.addEventListener("pointermove", (e) => {
+  const n = penNote();
+  if (drag?.kind !== "pen" || !sel || !n) return;
+  const p = within(toPhys(e), sel);
+  drag.at = p;
+  if (drag.snap) {
+    n.pts = resized(drag.snap.shape, drag.snap.from, p).map((q) => [q.x, q.y, 0.5]);
+  } else if (e.shiftKey || drag.straight) {
+    // Shift: a straight line from where the stroke began, at 45° steps while Shift is held.
+    const [x0, y0] = n.pts[0];
+    const end = e.shiftKey ? snapAngle({ x: x0, y: y0 }, p) : p;
+    n.pts = [n.pts[0], [end.x, end.y, 0.5]];
+    n.shape = drag.straight = true;
+  } else {
+    const samples = e.getCoalescedEvents?.() ?? [];
+    for (const ev of samples.length ? samples : [e]) {
+      const q = within(toPhys(ev), sel);
+      const [lx, ly] = n.pts[n.pts.length - 1];
+      if (Math.hypot(q.x - lx, q.y - ly) >= 1) n.pts.push([q.x, q.y, n.pen ? ev.pressure : 0.5]);
+    }
+  }
+  // Moving on re-arms the hold timer; a few pixels of jitter while holding doesn't.
+  if (Math.hypot(p.x - drag.still.x, p.y - drag.still.y) > 4 * scale()) {
+    drag.still = p;
+    if (!drag.snap) armHold();
+  }
+  redrawSoon();
+});
+
+function endStroke() {
+  if (drag?.kind !== "pen") return;
+  clearTimeout(holdTimer);
+  drag = null;
+  drawNotes();
+  updateChrome();
+  renderUI();
+}
+ui.addEventListener("pointerup", endStroke);
+ui.addEventListener("pointercancel", endStroke);
+
 // Right-click cancels, like Lightshot.
 window.addEventListener("contextmenu", (e) => {
   e.preventDefault();
@@ -1111,9 +1245,10 @@ window.addEventListener("keydown", (e) => {
     if (k === "l") return scrollCapture(), true;
     const tools: Record<string, Tool> = {
       v: "select", b: "blur", p: "pixelate", r: "box",
-      a: "arrow", o: "rect", h: "mark", w: "text", n: "step",
+      a: "arrow", o: "rect", h: "mark", w: "text", n: "step", d: "pen",
     };
     if (tools[k]) return setTool(tools[k]), true;
+    if (k === "[" || k === "]") return setPenSize(penSize + (k === "]" ? 1 : -1)), true;
     if (k === "t") return extractText(), true;
     if (k === "s") return startSmart(), true;
     return false;
@@ -1130,6 +1265,7 @@ toolbar.addEventListener("click", (e) => {
     case "ocr": return void extractText();
     case "smart": return void startSmart();
     case "color": return cycleColor();
+    case "size": return setPenSize((penSize + 1) % PEN_SIZES.length);
     case "pin": return void pin();
     case "scroll": return void scrollCapture();
     case "copy":

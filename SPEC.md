@@ -96,7 +96,7 @@ If a decision changes, update this file in the same commit.
 
 | Feature | Notes | Version |
 |---|---|---|
-| Annotations | Arrows, boxes, text, highlighter, numbered step badges (1, 2, 3). Editable after placing. | v2 |
+| Annotations | Pen (freehand, snaps to shapes), arrows, boxes, text, highlighter, numbered step badges (1, 2, 3). Editable after placing. | v2 |
 | Searchable history | Every capture saved with OCR text indexed; search "invoice" to find it. | v3 |
 | Pin to screen | Float a screenshot always-on-top as a reference. | v3 |
 | Smart snap + magnifier | While dragging: snap to windows/UI elements, zoom loupe, pixel color with copyable hex. | v3 |
@@ -108,7 +108,16 @@ If a decision changes, update this file in the same commit.
 - Editable after placing: with Select (`V`), click a mark to pick it (dashed outline), drag to move, `Del` deletes it, `C` recolours it, double-click a text note to edit it. Text: `Enter` done, `Shift+Enter` new line, `Esc` discard, clicking away also finishes it.
 - Annotations always sit above redactions: a blur drawn over an arrow never smears the arrow. Why: the redacted image is kept as a separate base canvas, and notes are redrawn on top. That also makes moving a note cheap, with no re-blur.
 - Undo is a snapshot history of redactions and notes, so `Ctrl+Z` also reverts moves, edits, recolours and deletes.
-- Not done (skipped on purpose): freehand pen, resizing a placed mark (redraw it instead), font size picker. The toolbar is ~800 CSS px wide now, which fits 1366×768 at 125%.
+- Not done (skipped on purpose): resizing a placed mark (redraw it instead), font size picker. The toolbar is ~830 CSS px wide now, which fits 1366×768 at 125%.
+
+### Pen / Draw (added 2026-11-18, owner asked for "one of the best drawing options, but minimal")
+- `D` or the pencil button. Built from a research pass (tldraw, Excalidraw, Apple Markup, Procreate QuickShape, FigJam, CleanShot X):
+  - Strokes use `perfect-freehand` (MIT, ~3 kB, the algorithm behind tldraw and Excalidraw): a filled outline, smoothed and streamlined. Pen tablets use real pressure; a mouse gets pressure from speed (fast = thinner), which is what makes it feel like ink.
+  - Pointer events with coalesced samples, so fast strokes stay curves; one redraw per frame. `touch-action: none` so a pen stroke isn't taken as a Windows pan gesture.
+  - **Hold to snap:** hold still ~0.5 s before letting go and a rough line, circle/ellipse or box becomes a clean one; keep dragging to resize it (a line's end follows, a box/ellipse scales about its centre). Lines within 5° of level/upright are straightened. Recognition (`ink.ts`, unit-tested): line if the ends are ≥92% as far apart as the path is long (path measured on thinned points, since hand jitter added 20–30% to a straight stroke's length); closed shapes are a box if the path passes near all 4 bounding-box corners, an ellipse if not; scribbles and open curves stay ink.
+  - `Shift` draws a straight line at 45° steps. Sizes thin/medium/thick (3/5/10 CSS px) via `[` `]` or the size dot next to the colour (shown only for the pen or a picked stroke). The cursor is a dot of the pen's size and colour.
+  - Strokes are ordinary marks: pick with Select, move, recolour, resize, delete, undo.
+- Skipped on purpose (no clutter): a separate eraser (Select + `Del` and `Ctrl+Z` cover it), a freehand highlighter (the box highlighter fits screenshots of text better), a colour picker beyond the 5 presets, low-latency `desynchronized` canvas (the screenshot canvas has toolbars over it, which defeats it).
 
 ### Pin to screen (built on experiment/v2)
 - Toolbar pin button or `F`: the overlay closes and the selection floats in an always-on-top window, placed exactly where it was captured (annotations and redactions included).
@@ -124,15 +133,18 @@ If a decision changes, update this file in the same commit.
 
 ### Scrolling capture (built on experiment/v2)
 - Toolbar button or `L`: the overlay closes, the selected area is scrolled with the mouse wheel and grabbed after each step, and frames are stitched by matching pixel rows (top/bottom 10% ignored so sticky headers don't break it). Stops when the page hasn't moved for 4 steps in a row, or after 150 steps / 20,000 px. Fewer than 4 cut off a pinned section, where the page holds still while you scroll. Result is copied, saved to History, and a notification shows its size. Cursor is put back afterwards.
+- **Fixed bars are added once.** Rows at the bottom that stay put while the page scrolls (a chat app's message box, a sticky footer, a cookie bar) used to be stitched in on every step, so the Claude app's composer repeated down the image. Now each step stitches from just above them and they're added once at the end. Found per strip (a spinner in the message box only breaks its own strip) and only when a non-blank row anchors it (plain margins prove nothing). Counting too many rows is harmless: the page rows held back come in from the next frame. Same idea as ShareX's "ignore bottom edge" and Stackshot's insert-before-footer.
+- **No "hands off" notification at the start.** It slid into the captured corner and got stitched in (grey boxes down the image), and its slide-in looked like movement and appended the composer again. The hint lives in the button's tooltip now; Windows offers no supported way to hide other apps' toasts, and our own window could only be hidden with `WDA_EXCLUDEFROMCAPTURE`.
 - Marks drawn in the overlay are not included (it captures the live window).
-- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~1/3 of the area after the first one (sized from the largest distance a notch has moved). Half the area left too little overlap on animated sites. New captures are ignored while it runs. A notification says it started.
+- The cursor is parked over the area once. **Moving the mouse or pressing Esc stops it** and keeps what's stitched so far. Steps grow to ~1/3 of the area after the first one (sized from the largest distance a notch has moved). Half the area left too little overlap on animated sites. New captures are ignored while it runs.
 - Matching (fixed on zaidhossain.com, which stopped after one frame at first):
   - The frame is split into 8 vertical strips. Each strip lists every shift it fits, and the shift the most strips accept wins (at least 2), so an animated card only spoils its own strips. One vote per strip failed on repeating lines (Notepad): every text strip fit any multiple of the line height and outvoted the line-number strip. A lone strip never decides. On a tie, movement beats "didn't move", because a sticky column stays put.
   - Rows match on a tolerant signature (average colour), because browsers re-render text slightly after a scroll.
   - Only 60% of overlapping rows must agree, because scroll effects (text recolouring, images fading in) change about a third of them. Among the near-best shifts, the closest fit wins.
   - When the strips can't agree (a mostly blank overlap, a section that expands as you scroll, a pinned section), it guesses the step: median px per notch so far × notches. The guess is refined by a whole-frame fit that includes blank rows, so section edges pin it down. The refined value is used if at least 80% of rows fit (right ones scored 0.98+); otherwise the plain step is used (refined values at 0.64–0.71 doubled text). At most 10 guesses in a row (a pinned section took 4+). A frame that didn't change at all counts as "didn't move", so a blank end still stops.
-  - The wait after each scroll is 700 ms, so smooth scrolling and fade-ins finish. At 350 ms, images were caught half faded in.
-- Known limits: sticky columns repeat down the image, text-reveal animations can be caught mid-way, and pinned sections come out as slices. Every row-stitching tool has these.
+  - After each scroll it grabs every ~40 ms until two grabs in a row are alike (a caret or small spinner doesn't count) and the area has moved away from the last frame, up to 700 ms. A fixed 700 ms made every step slow; static pages settle in ~100 ms. "Moved away" stops a scroll that hasn't started yet from passing as the end. (At 350 ms fixed, images were caught half faded in.)
+- Known limits: sticky columns repeat down the image, text-reveal animations can be caught mid-way, horizontal carousels come out doubled, the scrollbar thumb shows as marks down the right edge, and scroll-jacked sections (the page holds still, then animates a whole block at once, like the "How I work" timeline on zaidhossain.com) depend on timing: clean in one run, one block doubled in another. Every external stitching tool (ShareX, Snagit, Shottr, CleanShot X…) fails on scroll-driven animation; only in-browser capture avoids it.
+- Retested 2026-11-18 on real Chrome windows: a chat page with a fixed composer + spinner + sticky header, 60 messages, 7720 px in 11.7 s, OCR found every message exactly once, composer once at the bottom; 300 near-identical lines, 10854 px in 15.5 s, all 300 once; zaidhossain.com top to bottom in 55–65 s (was ~106 s).
 - Tested on a real Notepad with 300 lines: scrolled top to bottom on its own, 700×7398 in ~39 s, slices checked by eye with no seams or doubled lines. Stitch logic has unit tests (sticky header, blank areas, full page).
 
 ### History rules (v3)

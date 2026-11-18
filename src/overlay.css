@@ -39,6 +39,7 @@ canvas {
 
 #ui {
   cursor: crosshair;
+  touch-action: none; /* a pen tablet's stroke must not turn into a Windows pan/scroll gesture */
 }
 
 /* Open: the window appears showing only the frozen screenshot (identical to the real screen),
@@ -344,6 +345,13 @@ button.chip {
   height: 16px;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+}
+
+/* Pen size button: a dot as big as the stroke. */
+.dot {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 /* Text note being typed. Same font/spacing as annotate.ts draws it, so nothing jumps on Enter. */

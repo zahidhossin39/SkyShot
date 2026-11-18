@@ -22,6 +22,16 @@ test("hit-testing picks the topmost note, arrows by distance, boxes by edge", ()
   assert.equal(noteAt(c, notes, { x: 455, y: 30 }, 1), 3, "second, longer text line");
 });
 
+test("pen strokes are hit near the ink only, and move with their points", () => {
+  // An L stroke, 5 px thick at 200% scaling.
+  const pen: Note = { kind: "pen", color: red, size: 5, pts: [[0, 0, 0.5], [0, 100, 0.5], [100, 100, 0.5]], pen: false };
+  assert.equal(noteAt(c, [pen], { x: 15, y: 50 }, 2), 0, "within reach of the ink (8*2 + 5)");
+  assert.equal(noteAt(c, [pen], { x: 60, y: 50 }, 2), -1, "inside its bounds, away from the ink");
+  assert.deepEqual(noteBox(c, pen, 2), { x: -5, y: -5, w: 110, h: 110 });
+  assert.deepEqual(moved(pen, 3, 4), { ...pen, pts: [[3, 4, 0.5], [3, 104, 0.5], [103, 104, 0.5]] });
+  assert.equal(isTiny({ ...pen, pts: [[5, 5, 0.5]] }, 1), false, "a single click leaves a dot");
+});
+
 test("text box grows with lines and longest line", () => {
   assert.deepEqual(noteBox(c, { kind: "text", color: red, at: { x: 5, y: 5 }, text: "ab\nabcd" }, 2), { x: 5, y: 5, w: 40, h: 90 });
 });
