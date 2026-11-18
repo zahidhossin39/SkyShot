@@ -158,11 +158,21 @@ fn strip_fits(prev: &[(u64, bool)], next: &[(u64, bool)]) -> Vec<Option<(f32, f3
     fits
 }
 
-/// Bottom `s` rows of `frame`, appended to `out`.
-fn append_new_rows(out: &mut Vec<u8>, frame: &RgbaImage, s: usize) {
-    let stride = frame.width() as usize * 4;
-    let raw = frame.as_raw();
-    out.extend_from_slice(&raw[raw.len() - s * stride..]);
+/// Rows at the bottom that stay put while the page scrolls: a chat's message box, a sticky footer,
+/// a cookie bar. Appending each frame's bottom rows repeated them down the image (a chat app's
+/// composer showed up 3 times), so `run` stitches from just above them and adds them once at the
+/// end. Per strip, so an animated bit (a spinner in the message box) only breaks its own strip.
+/// Over-counting is harmless: the page rows held back are stitched from the next frame instead.
+fn fixed_bottom(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>]) -> usize {
+    let h = prev[0].len().min(next[0].len());
+    // The whole matching run counts (a message box has blank padding above it), but only if it
+    // has a non-blank row: a strip of plain margin matches at any shift and proves nothing.
+    let strip_run = |(p, n): (&Vec<(u64, bool)>, &Vec<(u64, bool)>)| {
+        let run = (0..h).rev().take_while(|&i| p[i].0.abs_diff(n[i].0) <= SIG_TOLERANCE).count();
+        let anchored = n[h - run..].iter().any(|r| !r.1);
+        if anchored { run } else { 0 }
+    };
+    prev.iter().zip(next).map(strip_run).max().unwrap_or(0).min(h / 3)
 }
 
 /// True while a scrolling capture runs, so a new capture can't start on top of it.
@@ -186,10 +196,13 @@ pub fn run(
     mut scroll: impl FnMut(i32) -> bool,
 ) -> Result<RgbaImage, String> {
     let first = grab()?;
-    let width = first.width();
+    let (width, area_h) = first.dimensions();
+    let (stride, h) = (width as usize * 4, area_h as usize);
     let mut out = first.as_raw().clone();
-    let mut height = first.height();
+    let mut height = area_h;
     let mut prev = rows(&first);
+    let mut prev_frame = first;
+    let mut tail = 0; // bottom rows of `prev_frame` not in `out` yet (fixed rows, held back)
     let mut still = 0;
     let mut notches = 1;
     let mut max_per_notch = 0f32;
@@ -223,21 +236,37 @@ pub fn run(
             }
             Some(s) => {
                 still = 0;
-                append_new_rows(&mut out, &frame, s);
-                height += s as u32;
+                let s = s.min(h);
+                let fixed = fixed_bottom(&prev, &next).min(h.saturating_sub(s + 1));
+                if s + tail > h {
+                    // Moved further than the held-back rows reach: keep them (a rare gap either way).
+                    out.extend_from_slice(&prev_frame.as_raw()[(h - tail) * stride..]);
+                    tail = 0;
+                }
+                // Take the fixed rows back off the stitch; they're added once, at the end.
+                let cut = fixed.saturating_sub(tail);
+                out.truncate(out.len() - cut * stride);
+                tail += cut;
+                // The stitch ends at frame row h - tail - s; add the new rows down to the fixed ones.
+                out.extend_from_slice(&frame.as_raw()[(h - tail - s) * stride..(h - fixed) * stride]);
+                tail = fixed;
+                height = (out.len() / stride) as u32;
                 if guesses == 0 {
                     per_notch.push(s as f32 / notches as f32);
                     max_per_notch = max_per_notch.max(s as f32 / notches as f32);
-                    notches = next_notches(first.height(), max_per_notch);
+                    notches = next_notches(area_h, max_per_notch);
                 }
             }
             None => break, // scrolled too far to line up (or the content changed): stop cleanly
         }
         prev = next;
+        prev_frame = frame;
         if height >= MAX_HEIGHT {
             break;
         }
     }
+    out.extend_from_slice(&prev_frame.as_raw()[(h - tail) * stride..]); // the fixed rows, once
+    height = (out.len() / stride) as u32;
     RgbaImage::from_raw(width, height, out).ok_or_else(|| "stitch size mismatch".into())
 }
 
@@ -459,6 +488,51 @@ mod tests {
         // Once the window is all blank, moving and stopped look the same: it stops, content kept.
         assert!((150..=300).contains(&img.height()), "got {}", img.height());
         assert_eq!(*img.get_pixel(5, 149), *page_frame(0, 150, 0).get_pixel(5, 149));
+    }
+
+    /// Regression (Claude desktop app): a chat's message box stays put at the bottom, with blank
+    /// padding above it and a spinner in it. It was stitched in on every step and repeated.
+    #[test]
+    fn fixed_message_box_appears_once_at_the_end() {
+        let whole = page_frame(0, 400, 0);
+        let message_box = page_frame(9_000, 30, 0);
+        let frame = |offset: u32, tick: u32| {
+            RgbaImage::from_fn(20, 100, |x, y| match y {
+                0..70 => *whole.get_pixel(x, offset + y),
+                70..74 => image::Rgba([30, 30, 30, 255]), // padding: blank, the same every frame
+                _ if x >= 17 && (84..92).contains(&y) => image::Rgba([(tick * 61) as u8, 9, 9, 255]), // spinner
+                _ => *message_box.get_pixel(x, y - 70),
+            })
+        };
+        let (offset, tick) = (std::cell::Cell::new(0u32), std::cell::Cell::new(0u32));
+        let img = run(
+            || {
+                tick.set(tick.get() + 1);
+                Ok(frame(offset.get(), tick.get()))
+            },
+            |n| {
+                offset.set((offset.get() + 10 * n as u32).min(330));
+                true
+            },
+        )
+        .unwrap();
+        assert_eq!(img.height(), 430, "whole page, then the box once");
+        for y in 0..430 {
+            for x in 0..17 {
+                let want = if y < 400 { *whole.get_pixel(x, y) } else { *frame(330, 0).get_pixel(x, y - 330) };
+                assert_eq!(*img.get_pixel(x, y), want, "pixel {x},{y}");
+            }
+        }
+    }
+
+    /// Plain margins on both sides match at any shift; they must not count as a fixed footer.
+    #[test]
+    fn blank_margins_are_not_a_fixed_footer() {
+        let framed = |offset: u32| {
+            let page = page_frame(offset, 100, 0);
+            RgbaImage::from_fn(20, 100, |x, y| if x < 5 || x >= 15 { image::Rgba([255; 4]) } else { *page.get_pixel(x, y) })
+        };
+        assert_eq!(fixed_bottom(&rows(&framed(0)), &rows(&framed(30))), 0);
     }
 
     #[test]

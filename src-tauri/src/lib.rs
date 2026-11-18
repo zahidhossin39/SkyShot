@@ -260,7 +260,7 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
             // Park the cursor over the area once; if the user moves it (or presses Esc), stop.
             let (cx, cy) = (mx + (x + w / 2) as i32, my + (y + h / 2) as i32);
             scroll::move_cursor(cx, cy);
-            output::notify(&app, "Scrolling capture…", "Hands off. Move the mouse or press Esc to stop early.");
+            // No "hands off" toast here: it slid into the area being captured and got stitched in.
             scroll::run(grab, |n| {
                 if scroll::user_interrupted(cx, cy) {
                     return false;
