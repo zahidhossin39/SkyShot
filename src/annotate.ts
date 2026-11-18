@@ -23,6 +23,18 @@ const LINE = 1.25;
 const STEP_R = 13;
 export const textFont = (s: number) => `600 ${FONT_PX * s}px "Segoe UI", sans-serif`;
 
+// Outline per stroke, reused across redraws: re-outlining 40 strokes took ~14 ms a frame, so
+// any drag got laggy. Keyed by the points array (moving or snapping makes a new one); the live
+// stroke grows in place, so its point count is part of the key.
+const inkCache = new WeakMap<InkPoint[], { len: number; size: number; path: Path2D }>();
+function inkPath(pts: InkPoint[], size: number, pen: boolean): Path2D {
+  const hit = inkCache.get(pts);
+  if (hit && hit.len === pts.length && hit.size === size) return hit.path;
+  const path = new Path2D(strokePath(pts, size, pen));
+  inkCache.set(pts, { len: pts.length, size, path });
+  return path;
+}
+
 /** Draws one note. `step` is its number among step badges (they renumber on delete). */
 export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: number) {
   c.save();
@@ -84,7 +96,7 @@ export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: 
         n.pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
         c.stroke();
       } else {
-        c.fill(new Path2D(strokePath(n.pts, n.size * s, n.pen)));
+        c.fill(inkPath(n.pts, n.size * s, n.pen));
       }
       break;
     case "text":

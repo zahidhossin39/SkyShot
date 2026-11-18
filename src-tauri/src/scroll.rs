@@ -567,6 +567,37 @@ mod tests {
         }
     }
 
+    /// No fixed bar, but the page has a tall band of identical coloured rows (a banner, a code
+    /// block background). As it scrolls past the bottom, its rows match at the same y and get
+    /// mistaken for a fixed footer. Held-back rows are re-taken from the next frame, so the
+    /// stitch must still be the page, exactly: nothing lost, nothing doubled.
+    #[test]
+    fn content_mistaken_for_a_fixed_bar_is_still_stitched_exactly() {
+        let page = RgbaImage::from_fn(20, 400, |x, y| {
+            if (150..210).contains(&y) { image::Rgba([200, 40, 90, 255]) } else { *page_frame(0, 400, 0).get_pixel(x, y) }
+        });
+        let offset = std::cell::Cell::new(0u32);
+        let mut mistaken = 0;
+        let mut last = rows(&image::imageops::crop_imm(&page, 0, 0, 20, 100).to_image());
+        let img = run(
+            || {
+                let f = image::imageops::crop_imm(&page, 0, offset.get(), 20, 100).to_image();
+                let r = rows(&f);
+                mistaken = mistaken.max(fixed_bottom(&last, &r));
+                last = r;
+                Ok(f)
+            },
+            |n| {
+                offset.set((offset.get() + 10 * n as u32).min(300));
+                true
+            },
+        )
+        .unwrap();
+        assert!(mistaken > 0, "the band should have been taken for a fixed bar at least once");
+        assert_eq!(img.height(), 400);
+        assert!(img.as_raw() == page.as_raw(), "stitch differs from the page");
+    }
+
     /// Plain margins on both sides match at any shift; they must not count as a fixed footer.
     #[test]
     fn blank_margins_are_not_a_fixed_footer() {
