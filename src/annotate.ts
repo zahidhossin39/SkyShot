@@ -12,8 +12,9 @@ export type Note =
   | { kind: "rect" | "mark"; color: string; r: Rect }
   | { kind: "text"; color: string; at: Point; text: string }
   | { kind: "step"; color: string; at: Point }
-  // size: CSS px. pen: real stylus pressure. shape: snapped to a clean line/box/ellipse.
-  | { kind: "pen"; color: string; size: number; pts: InkPoint[]; pen: boolean; shape?: boolean };
+  // size: CSS px. alpha: opacity (1 if unset). pen: real stylus pressure. shape: snapped to a
+  // clean line/box/ellipse.
+  | { kind: "pen"; color: string; size: number; alpha?: number; pts: InkPoint[]; pen: boolean; shape?: boolean };
 export type NoteKind = Note["kind"];
 
 export const COLORS = ["#ef4444", "#facc15", "#22c55e", "#3b82f6", "#18181b"];
@@ -73,6 +74,10 @@ export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: 
       c.fillText(String(step), n.at.x, n.at.y + s);
       break;
     case "pen":
+      if ((n.alpha ?? 1) < 1) {
+        c.globalAlpha = n.alpha!;
+        c.shadowColor = "transparent"; // a shadow under see-through ink just looks muddy
+      }
       if (n.shape) {
         c.lineWidth = n.size * s * 0.8; // matches mouse ink, which thins a little with speed
         c.beginPath();

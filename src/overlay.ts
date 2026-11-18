@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { COLORS, drawNote, FONT_PX, isTiny, moved, noteAt, noteBox, type Note, type NoteKind, type Point, type Rect } from "./annotate";
 import { findActions, findSensitive, type Action, type Word } from "./detect";
-import { PEN_SIZES, recognize, resized, snapAngle, type Shape } from "./ink";
+import { recognize, resized, snapAngle, type Shape } from "./ink";
 
 type Mode = "capture" | "text";
 type RedactTool = "blur" | "pixelate" | "box";
@@ -78,7 +78,12 @@ let live: { el: HTMLElement; text: string }[][] | null = null;
 let notes: Note[] = [];
 let picked = -1; // selected note, for move / delete / recolour
 let color = COLORS[0];
-let penSize = 1; // index into PEN_SIZES
+let penSize = 5; // CSS px
+let penAlpha = 1;
+/** Where the pen would touch down (physical px), for the size ring; null while drawing or away. */
+let penHover: Point | null = null;
+const penSizeInput = $<HTMLInputElement>("pen-size");
+const penAlphaInput = $<HTMLInputElement>("pen-alpha");
 /** Text note being typed: where, and which note it replaces (-1 = new). */
 let editing: { at: Point; idx: number } | null = null;
 /** Undo snapshots. Covers redactions and every annotation change (add, move, edit, delete). */
@@ -278,6 +283,20 @@ function renderUI() {
     uctx.setLineDash([]);
   }
 
+  // Pen size ring around the exact touch-down point (same pixels as the ink, so it can't drift).
+  if (penHover && !drag) {
+    const r = Math.max(2 * s, (penSize * s) / 2);
+    uctx.lineWidth = Math.max(1, s);
+    uctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    uctx.beginPath();
+    uctx.arc(penHover.x, penHover.y, r + uctx.lineWidth, 0, Math.PI * 2);
+    uctx.stroke();
+    uctx.strokeStyle = color;
+    uctx.beginPath();
+    uctx.arc(penHover.x, penHover.y, r, 0, Math.PI * 2);
+    uctx.stroke();
+  }
+
   if (notes[picked]) {
     const b = noteBox(vctx, notes[picked], s);
     const pd = 5 * s;
@@ -351,11 +370,20 @@ function updateChrome() {
     );
     toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = history.length === 0;
     toolbar.querySelector<HTMLElement>(".swatch")!.style.background = color;
-    const sizeBtn = toolbar.querySelector<HTMLElement>('[data-action="size"]')!;
-    sizeBtn.hidden = tool !== "pen" && notes[picked]?.kind !== "pen";
-    const dot = sizeBtn.querySelector<HTMLElement>(".dot")!;
-    dot.style.width = dot.style.height = `${PEN_SIZES[penSize] + 2}px`;
+    const opts = toolbar.querySelector<HTMLElement>(".pen-opts")!;
+    opts.hidden = tool !== "pen" && notes[picked]?.kind !== "pen";
+    penSizeInput.value = String(penSize);
+    penAlphaInput.value = String(Math.round(penAlpha * 100));
+    $("pen-size-val").textContent = String(penSize);
+    $("pen-alpha-val").textContent = `${Math.round(penAlpha * 100)}%`;
     placeNear(toolbar, sel);
+    if (!opts.hidden) {
+      // Away from the selection when there's room, so the panel doesn't cover the image.
+      const tb = toolbar.getBoundingClientRect();
+      const below = tb.top >= (sel.y + sel.h) / s ? tb.bottom + 48 < window.innerHeight : tb.top < 48;
+      opts.classList.toggle("below", below);
+      opts.style.left = `${toolbar.querySelector<HTMLElement>('[data-tool="pen"]')!.getBoundingClientRect().left - tb.left}px`;
+    }
   }
   if (!panel.hidden && sel) placePanel();
 }
@@ -852,26 +880,29 @@ function cycleColor() {
   updateChrome();
 }
 
-/** Pen size for new strokes, and for the selected stroke. */
-function setPenSize(i: number) {
-  penSize = Math.max(0, Math.min(PEN_SIZES.length - 1, i));
+let sliding = false; // one undo step per slider drag, not one per pixel
+
+/** Pen thickness / opacity for new strokes, and for the selected stroke. */
+function setPen(size: number, alpha: number) {
+  penSize = Math.max(1, Math.min(30, Math.round(size)));
+  penAlpha = Math.max(0.1, Math.min(1, alpha));
   const n = notes[picked];
-  if (n?.kind === "pen" && n.size !== PEN_SIZES[penSize]) {
-    snapshot();
-    notes[picked] = { ...n, size: PEN_SIZES[penSize] };
+  if (n?.kind === "pen" && (n.size !== penSize || (n.alpha ?? 1) !== penAlpha)) {
+    if (!sliding) snapshot();
+    sliding = true;
+    notes[picked] = { ...n, size: penSize, alpha: penAlpha };
     drawNotes();
-    renderUI();
   }
   updateChrome();
+  renderUI();
 }
-
-/** Cursor = the pen tip: a dot of the stroke's size and colour, outlined for any background. */
-function penCursor() {
-  const d = PEN_SIZES[penSize] + 2;
-  const z = d + 6;
-  const c = z / 2;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${z}" height="${z}"><circle cx="${c}" cy="${c}" r="${d / 2 + 1}" fill="none" stroke="rgba(0,0,0,.55)"/><circle cx="${c}" cy="${c}" r="${d / 2}" fill="${color}" stroke="#fff" stroke-width="1.2"/></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
+penSizeInput.addEventListener("input", () => setPen(+penSizeInput.value, penAlpha));
+penAlphaInput.addEventListener("input", () => setPen(penSize, +penAlphaInput.value / 100));
+for (const el of [penSizeInput, penAlphaInput]) {
+  el.addEventListener("change", () => {
+    sliding = false;
+    el.blur(); // hand the keyboard back to the shortcuts
+  });
 }
 
 function deletePicked() {
@@ -984,7 +1015,7 @@ ui.addEventListener("mousedown", (e) => {
     picked = hit;
     color = notes[hit].color;
     const n = notes[hit];
-    if (n.kind === "pen") penSize = Math.max(0, PEN_SIZES.indexOf(n.size));
+    if (n.kind === "pen") [penSize, penAlpha] = [n.size, n.alpha ?? 1];
     snapshot(); // dropped on mouseup if it didn't actually move
     drag = { kind: "notemove", origin: p, start: notes[hit] };
   } else if (editable && tool === "select" && inside(p, sel!)) {
@@ -1027,8 +1058,13 @@ window.addEventListener("mousemove", (e) => {
       cursor = h ? CURSORS[h] : inside(p, sel) || noteAt(vctx, notes, p, scale()) >= 0 ? "move" : "crosshair";
     } else if (tool === "text" && sel && inside(p, sel)) {
       cursor = "text";
-    } else if (tool === "pen" && mode === "capture" && sel && inside(p, sel)) {
-      cursor = penCursor();
+    }
+    // The pen keeps Windows' own crosshair (its centre is exactly where ink lands at any display
+    // scaling; a custom dot cursor drew off-centre at 150%) plus a size ring drawn in the canvas.
+    const hover = tool === "pen" && mode === "capture" && sel && !smart && inside(p, sel) ? p : null;
+    if (hover || penHover) {
+      penHover = hover;
+      renderUI();
     }
     ui.style.cursor = cursor;
     return;
@@ -1146,7 +1182,8 @@ ui.addEventListener("pointerdown", (e) => {
   snapshot();
   picked = -1;
   const pen = e.pointerType === "pen";
-  notes.push({ kind: "pen", color, size: PEN_SIZES[penSize], pts: [[p.x, p.y, pen ? e.pressure : 0.5]], pen });
+  notes.push({ kind: "pen", color, size: penSize, alpha: penAlpha, pts: [[p.x, p.y, pen ? e.pressure : 0.5]], pen });
+  penHover = null; // the ink itself shows where it is now
   drag = { kind: "pen", origin: p, at: p, still: p };
   armHold();
   drawNotes();
@@ -1248,7 +1285,7 @@ window.addEventListener("keydown", (e) => {
       a: "arrow", o: "rect", h: "mark", w: "text", n: "step", d: "pen",
     };
     if (tools[k]) return setTool(tools[k]), true;
-    if (k === "[" || k === "]") return setPenSize(penSize + (k === "]" ? 1 : -1)), true;
+    if (k === "[" || k === "]") return setPen(penSize + (k === "]" ? 1 : -1) * (penSize >= 10 ? 2 : 1), penAlpha), true;
     if (k === "t") return extractText(), true;
     if (k === "s") return startSmart(), true;
     return false;
@@ -1265,7 +1302,6 @@ toolbar.addEventListener("click", (e) => {
     case "ocr": return void extractText();
     case "smart": return void startSmart();
     case "color": return cycleColor();
-    case "size": return setPenSize((penSize + 1) % PEN_SIZES.length);
     case "pin": return void pin();
     case "scroll": return void scrollCapture();
     case "copy":

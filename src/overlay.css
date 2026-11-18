@@ -347,11 +347,46 @@ button.chip {
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
 }
 
-/* Pen size button: a dot as big as the stroke. */
-.dot {
-  display: block;
-  border-radius: 50%;
-  background: currentColor;
+/* Pen sliders (shown while drawing or with a stroke picked): a small panel attached to the
+   toolbar by the Draw button, so the toolbar itself doesn't grow (it's ~950 px already). */
+.pen-opts {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--bar-bg);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+
+.pen-opts.below {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.pen-opts label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--bar-muted);
+  font-size: 12px;
+}
+
+.pen-opts input {
+  width: 76px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pen-opts output {
+  min-width: 3.2ch;
+  font-variant-numeric: tabular-nums;
+  color: var(--bar-fg);
 }
 
 /* Text note being typed. Same font/spacing as annotate.ts draws it, so nothing jumps on Enter. */

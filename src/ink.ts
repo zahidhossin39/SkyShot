@@ -10,9 +10,6 @@ type Point = { x: number; y: number };
 export type InkPoint = [number, number, number];
 export type Shape = { kind: "line" | "rect" | "ellipse"; pts: Point[] };
 
-/** Pen sizes in CSS px (stroke diameter at normal pressure). */
-export const PEN_SIZES = [3, 5, 10];
-
 /** Filled outline of a freehand stroke as an SVG path. `pen` = real stylus pressure; a mouse
  * gets pressure from speed instead (fast = thinner), which is what makes it feel like ink. */
 export function strokePath(pts: InkPoint[], size: number, pen: boolean): string {

@@ -49,9 +49,16 @@
         <button data-action="color" data-name="Colour" data-key="C" data-desc="Change colour for new marks, or for the selected one.">
           <span class="swatch"></span>
         </button>
-        <button data-action="size" data-name="Pen size" data-key="[ ]" data-desc="Thin, medium or thick, for new strokes or the selected one." hidden>
-          <span class="dot"></span>
-        </button>
+        <div class="pen-opts" hidden>
+          <label data-name="Thickness" data-key="[ ]" data-desc="How thick the pen draws, for new strokes or the selected one.">
+            <input type="range" id="pen-size" min="1" max="30" step="1" />
+            <output id="pen-size-val"></output>
+          </label>
+          <label data-name="Opacity" data-desc="See-through ink (e.g. to mark over text), for new strokes or the selected one.">
+            <input type="range" id="pen-alpha" min="10" max="100" step="5" />
+            <output id="pen-alpha-val"></output>
+          </label>
+        </div>
       </div>
       <div class="group" role="group" aria-label="Redact">
         <button data-tool="blur" data-name="Blur" data-key="B" data-desc="Drag inside the selection to blur. Strong blur can sometimes be undone — use Black box for passwords.">
