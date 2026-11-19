@@ -225,3 +225,8 @@ If a decision changes, update this file in the same commit.
 ## 11. Open items
 
 - Git co-author line (`Co-Authored-By: Claude ...`): ask the owner once before the first push to GitHub, then record the answer in `CLAUDE.md`. Until answered, leave it out.
+
+## Updates (v0.2.0)
+- Auto-update from GitHub Releases: a quiet check 10 s after start, notification if newer; Settings → General has Check / Update (downloads, installs passively, restarts).
+- Updates are signed (minisign key); unsigned or tampered installers are refused. Why: an updater is a remote code path, signing is the trust anchor.
+- Done in Rust commands, not the JS plugin API, to keep the "everything goes through app commands" rule.

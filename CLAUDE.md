@@ -21,6 +21,9 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 
 ## How things work (non-obvious)
 
+- Releases + auto-update (v0.2.0+): `tauri-plugin-updater` reads `releases/latest/download/latest.json`. Signing key: `~/.tauri/shutter.key` (no password; pubkey in tauri.conf.json). Losing it = no more updates for installed copies; the owner should back it up. Build with `TAURI_SIGNING_PRIVATE_KEY` set (contents of the key), then attach the `.exe`, `.exe.sig` and a `latest.json` (version, notes, pub_date, platforms.windows-x86_64 {signature = .sig contents, url}) to the GitHub release. Bump the version in tauri.conf.json, Cargo.toml and package.json.
+- Update e2e test that worked: build with `-- --config '{"version":"0.1.9"}'` plus a temporary `--update` single-instance hook calling `update::install_update`, install with `/S`, run `--update`; it became 0.2.0 in ~4 s.
+
 - Overlay windows (`overlay-N`, one per monitor) are pre-created hidden. Frame goes Rust -> page via WebView2 shared memory (`capture::post_frame`, `sharedbufferreceived` event), not IPC: IPC cost ~100 ms for 8 MB.
 - All overlay geometry is physical pixels; `scale() = W / innerWidth`.
 - Redactions are an ops list burned into the canvas, copied to a `base` canvas. Annotations (`notes`, drawn by `annotate.ts`) are redrawn over `base` on every change, so they stay on top. Undo = `history` snapshots of both; it re-blurs only if ops changed.
