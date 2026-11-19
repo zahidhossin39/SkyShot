@@ -563,6 +563,19 @@ async function leave() {
   await new Promise((r) => setTimeout(r, LEAVE_MS));
 }
 
+/** Fade out, then hide the window before any pixels are sent (see capture::hide). */
+async function leaveAndHide(fade = true) {
+  if (fade) await leave();
+  await invoke("overlay_hide");
+}
+
+/** A hidden overlay whose hand-off failed would leave the session stuck (hotkeys ignored). */
+const failed = (what: string) => (e: unknown) => {
+  console.error(`[overlay] ${what} failed`, e);
+  busy = false;
+  void invoke("overlay_close");
+};
+
 const close = async () => {
   await leave();
   return invoke("overlay_close");
@@ -583,13 +596,8 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   busy = true;
   const { bytes, headers } = cropSelection();
   // Save as opens a dialog, so it can't wait on a fade first; the rest fade out.
-  if (action !== "saveas") await leave();
-  try {
-    await invoke("finish", bytes, { headers: { ...headers, "x-action": action } });
-  } catch (e) {
-    console.error("[overlay] finish failed", e);
-    busy = false;
-  }
+  await leaveAndHide(action !== "saveas");
+  await invoke("finish", bytes, { headers: { ...headers, "x-action": action } }).catch(failed("finish"));
 }
 
 async function pin() {
@@ -597,13 +605,9 @@ async function pin() {
   commitNoteInput();
   busy = true;
   const { bytes, headers } = cropSelection();
-  await leave();
-  try {
-    await invoke("pin", bytes, { headers: { ...headers, "x-left": String(sel.x), "x-top": String(sel.y) } });
-  } catch (e) {
-    console.error("[overlay] pin failed", e);
-    busy = false;
-  }
+  const at = { "x-left": String(sel.x), "x-top": String(sel.y) };
+  await leaveAndHide();
+  await invoke("pin", bytes, { headers: { ...headers, ...at } }).catch(failed("pin"));
 }
 
 async function scrollCapture() {
@@ -622,13 +626,8 @@ async function grabText() {
   if (!sel || busy) return;
   busy = true;
   const { bytes, headers } = cropSelection();
-  await leave();
-  try {
-    await invoke("grab_text", bytes, { headers });
-  } catch (e) {
-    console.error("[overlay] grab_text failed", e);
-    busy = false;
-  }
+  await leaveAndHide();
+  await invoke("grab_text", bytes, { headers }).catch(failed("grab_text"));
 }
 
 /** Text panel + Live Text + Smart actions, all from one OCR pass. */

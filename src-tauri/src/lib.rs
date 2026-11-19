@@ -118,6 +118,11 @@ fn overlay_shown(app: AppHandle, window: WebviewWindow) -> u128 {
 }
 
 #[tauri::command]
+fn overlay_hide(app: AppHandle) {
+    capture::hide(&app);
+}
+
+#[tauri::command]
 fn overlay_close(app: AppHandle) {
     capture::close(&app);
 }
@@ -555,6 +560,7 @@ pub fn run() {
             overlay_pending,
             overlay_frame,
             overlay_shown,
+            overlay_hide,
             overlay_close,
             ocr_image,
             copy_text,

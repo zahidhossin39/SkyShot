@@ -277,6 +277,15 @@ pub fn since_hotkey(app: &AppHandle) -> u128 {
         .unwrap_or(0)
 }
 
+/// Hide the overlays right away, before the selection's pixels are sent over (a full-screen
+/// selection took 150-300 ms, and the frozen screenshot sat there undimmed meanwhile, then
+/// snapped to the live screen: a visible blink). The session stays until `close`.
+pub fn hide(app: &AppHandle) {
+    for w in overlay_windows(app) {
+        let _ = w.hide();
+    }
+}
+
 pub fn close(app: &AppHandle) {
     let state = app.state::<AppState>();
     *state.session.lock().unwrap() = None;
