@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 
 type Action = "capture" | "text";
 type SettingsView = {
@@ -241,3 +242,31 @@ try {
 showPage(lastPage);
 
 refresh();
+
+// ---------------------------------------------------------------- updates
+getVersion().then((v) => ($("version").textContent = `Version ${v}`));
+
+const updateBtn = $<HTMLButtonElement>("update-btn");
+const updateStatus = $("update-status");
+let available: string | null = null;
+
+updateBtn.addEventListener("click", async () => {
+  updateBtn.disabled = true;
+  try {
+    if (available) {
+      updateStatus.textContent = `Downloading ${available}… Shutter restarts when it's done.`;
+      await invoke("install_update");
+      return; // the app restarts
+    }
+    updateStatus.textContent = "Checking…";
+    const u = await invoke<{ version: string } | null>("check_update");
+    available = u?.version ?? null;
+    updateStatus.textContent = u ? `Version ${u.version} is available.` : "You have the latest version.";
+    updateBtn.textContent = u ? `Update to ${u.version}` : "Check for updates";
+    updateBtn.classList.toggle("primary", !!u);
+  } catch (e) {
+    updateStatus.textContent = `Couldn't update: ${e}`;
+  } finally {
+    updateBtn.disabled = false;
+  }
+});

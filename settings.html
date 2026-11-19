@@ -48,7 +48,7 @@
         </button>
       </nav>
 
-      <p class="rail-foot">Version 0.1.0</p>
+      <p class="rail-foot" id="version"></p>
     </aside>
 
     <main>
@@ -178,7 +178,7 @@
       <section class="page" data-page="general" hidden>
         <header>
           <h1>General</h1>
-          <p>How the app starts.</p>
+          <p>How the app starts and updates.</p>
         </header>
         <div class="group">
           <label class="row">
@@ -188,6 +188,13 @@
             </span>
             <input type="checkbox" role="switch" class="switch" id="autostart" />
           </label>
+          <div class="row">
+            <div class="row-text grow">
+              <div class="label">Updates</div>
+              <div class="hint" id="update-status">Checked automatically when Shutter starts.</div>
+            </div>
+            <button class="btn" id="update-btn">Check for updates</button>
+          </div>
         </div>
       </section>
     </main>

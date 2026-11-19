@@ -1,6 +1,6 @@
 [package]
 name = "screenshot-app"
-version = "0.1.0"
+version = "0.2.0"
 description = "Screenshot tool with blur/redact and OCR"
 authors = ["Zaid Hossain"]
 license = "MIT"
@@ -32,6 +32,7 @@ xcap = "0.9.8"
 arboard = "3.7.0"
 chrono = "0.4.45"
 image = { version = "0.25", default-features = false, features = ["png"] }
+tauri-plugin-updater = "2"
 
 # Windows built-in OCR (Windows.Media.Ocr). Same version Tauri already pulls in.
 [target.'cfg(windows)'.dependencies]

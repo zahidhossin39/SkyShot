@@ -9,6 +9,7 @@ mod scroll;
 mod settings;
 mod state;
 mod tray;
+mod update;
 
 use serde::{Deserialize, Serialize};
 use state::AppState;
@@ -516,6 +517,7 @@ pub fn run() {
                 .with_handler(hotkeys::on_shortcut)
                 .build(),
         )
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
@@ -537,6 +539,7 @@ pub fn run() {
             tray::create(handle)?;
             hotkeys::register_all(handle);
             capture::warm_up(handle);
+            update::check_on_start(handle);
             // Retention also runs on start, so shots expire even without new captures.
             let h = handle.clone();
             std::thread::spawn(move || history::prune(&h));
@@ -547,6 +550,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            update::check_update,
+            update::install_update,
             overlay_pending,
             overlay_frame,
             overlay_shown,
