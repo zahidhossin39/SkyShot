@@ -93,7 +93,7 @@ pub fn add(app: &AppHandle, rgba: Vec<u8>, width: u32, height: u32) -> Result<()
     store(app, &entries)?;
     drop(_lock);
     prune(app);
-    println!("[history] saved {width}x{height} in {} ms", t.elapsed().as_millis());
+    crate::log!("[history] saved {width}x{height} in {} ms", t.elapsed().as_millis());
     Ok(())
 }
 

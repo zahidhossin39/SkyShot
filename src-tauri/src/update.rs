@@ -34,7 +34,9 @@ pub fn check_on_start(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio_sleep().await;
-        if let Ok(Some(u)) = check_update(app.clone()).await {
+        let found = check_update(app.clone()).await;
+        crate::log!("[update] start check: {:?}", found.as_ref().map(|u| u.as_ref().map(|u| &u.version)));
+        if let Ok(Some(u)) = found {
             crate::output::notify(
                 &app,
                 &format!("Shutter {} is available", u.version),

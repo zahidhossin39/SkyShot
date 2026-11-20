@@ -137,7 +137,7 @@ pub fn reread(provider: &str, key: &str, rgba: &[u8], width: u32, height: u32) -
             post(url, &[&headers[..], &auth[..]].concat(), &body.to_string()).and_then(|(s, b)| parse_claude(s, &b))
         }
     };
-    println!("[ai] {provider} {width}x{height}: {} ms, ok={}", t.elapsed().as_millis(), result.is_ok());
+    crate::log!("[ai] {provider} {width}x{height}: {} ms, ok={}", t.elapsed().as_millis(), result.is_ok());
     result
 }
 

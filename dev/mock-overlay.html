@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- The capture overlay in a normal browser, with Tauri and the WebView2 shared-buffer frame
+     faked. Open http://localhost:1430/dev/mock-overlay.html with the dev server up.
+     The markup is fetched from /overlay.html, so this page never goes stale.
+     `await window.__ready` resolves once the frozen frame is on screen. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/overlay.css" />
+    <script>
+      const W = Math.round(innerWidth * devicePixelRatio);
+      const H = Math.round(innerHeight * devicePixelRatio);
+      // A fake "screenshot": light page with text lines.
+      const fc = document.createElement("canvas");
+      fc.width = W;
+      fc.height = H;
+      const f = fc.getContext("2d");
+      f.fillStyle = "#f4f4f5";
+      f.fillRect(0, 0, W, H);
+      f.fillStyle = "#18181b";
+      f.font = `${16 * devicePixelRatio}px Segoe UI`;
+      for (let i = 0; i < 30; i++) f.fillText(`Line ${i + 1}: the quick brown fox jumps over the lazy dog`, 40, 60 + i * 26 * devicePixelRatio);
+      const frame = f.getImageData(0, 0, W, H).data.buffer;
+      let ready;
+      window.__ready = new Promise((r) => (ready = r));
+      window.__calls = [];
+      window.chrome = { webview: Object.assign(new EventTarget(), { releaseBuffer() {} }) };
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: (cb) => {
+          const id = Math.floor(Math.random() * 1e9);
+          window[`_${id}`] = cb;
+          return id;
+        },
+        metadata: { currentWindow: { label: "overlay-0" }, currentWebview: { windowLabel: "overlay-0", label: "overlay-0" } },
+        invoke: async (cmd, args) => {
+          window.__calls.push(cmd);
+          if (cmd === "overlay_pending") return { mode: "capture", width: W, height: H };
+          if (cmd === "overlay_frame") {
+            setTimeout(() => {
+              const ev = new Event("sharedbufferreceived");
+              ev.getBuffer = () => frame;
+              window.chrome.webview.dispatchEvent(ev);
+            });
+            return null;
+          }
+          if (cmd === "overlay_shown") {
+            setTimeout(() => ready(true));
+            return 1;
+          }
+          return null;
+        },
+      };
+    </script>
+    <script type="module">
+      const html = await (await fetch("/overlay.html")).text();
+      document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+      await import("/src/overlay.ts");
+    </script>
+  </head>
+  <body></body>
+</html>

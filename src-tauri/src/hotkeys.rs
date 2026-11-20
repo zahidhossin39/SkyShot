@@ -49,7 +49,7 @@ pub fn register_all(app: &AppHandle) {
     for accel in [&settings.hotkey_capture, &settings.hotkey_text] {
         if let Ok(sc) = parse(accel)
             && let Err(e) = gs.register(sc) {
-                eprintln!("[hotkeys] could not register {accel}: {e}");
+                crate::log!("[hotkeys] could not register {accel}: {e}");
             }
     }
     tray::refresh_labels(app);

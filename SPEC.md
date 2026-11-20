@@ -222,9 +222,18 @@ If a decision changes, update this file in the same commit.
 - **Ask-AI-anything / translate.** Not wanted now; trivial to add once the AI hookup exists.
 - **Fully automatic redaction.** Too easy to silently hide the wrong thing.
 
-## 11. Open items
+## 11. Status and open items
 
-- Git co-author line (`Co-Authored-By: Claude ...`): ask the owner once before the first push to GitHub, then record the answer in `CLAUDE.md`. Until answered, leave it out.
+Released: v0.2.1 on GitHub (installer + auto-update). Every feature in §6 is built and unit- or mock-tested.
+
+Never hand-tested in the real app (the owner's list; tick off here, nowhere else):
+- Draw (pen), scrolling capture on a real page, Live Text link chips opening the browser
+- Moving / deleting a blur, the History viewer (added 2026-11-20)
+- Save as, Ctrl+Shift+PrtSc text grab, hotkey rebinding, autostart
+- Multi-monitor, 125% / 150% display scaling
+- AI re-read with a real key
+
+Naming: the visible name is **Shutter** (2026-11-12). The bundle id, exe name and AI-key vault name stay `screenshot-app`, so settings, History and a saved key survive.
 
 ## Updates (v0.2.0)
 - Auto-update from GitHub Releases: a quiet check 10 s after start, notification if newer; Settings → General has Check / Update (downloads, installs passively, restarts).

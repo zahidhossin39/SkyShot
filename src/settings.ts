@@ -240,6 +240,8 @@ refresh();
 // ---------------------------------------------------------------- updates
 getVersion().then((v) => ($("version").textContent = `Version ${v}`));
 
+$("open-logs").addEventListener("click", () => invoke("open_logs").catch((e) => (updateStatus.textContent = String(e))));
+
 const updateBtn = $<HTMLButtonElement>("update-btn");
 const updateStatus = $("update-status");
 let available: string | null = null;

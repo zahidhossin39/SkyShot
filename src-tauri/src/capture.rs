@@ -82,7 +82,7 @@ pub fn warm_up(app: &AppHandle) {
     let count = xcap::Monitor::all().map(|m| m.len()).unwrap_or(1);
     for i in 0..count {
         if let Err(e) = get_or_create(app, &format!("{PREFIX}{i}")) {
-            eprintln!("[capture] warm-up failed: {e}");
+            crate::log!("[capture] warm-up failed: {e}");
         }
     }
 }
@@ -104,7 +104,7 @@ pub fn start(app: &AppHandle, mode: Mode) {
     let app = app.clone();
     std::thread::spawn(move || {
         if let Err(e) = open(&app, mode) {
-            eprintln!("[capture] failed: {e}");
+            crate::log!("[capture] failed: {e}");
             close(&app);
         }
     });
@@ -149,7 +149,7 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
             let _ = w.hide();
         }
     }
-    println!(
+    crate::log!(
         "[capture] grabbed {} monitor(s) in {capture_ms} ms, events sent at {} ms",
         monitors.len(),
         since_hotkey(app)
@@ -181,7 +181,7 @@ fn send_windows(app: &AppHandle, monitors: &[(i32, i32, u32, u32)]) {
         let rects = clip_to_monitor(&wins, (mx, my, mw, mh));
         let _ = app.emit_to(EventTarget::webview_window(format!("{PREFIX}{i}")), "overlay:windows", rects);
     }
-    println!("[capture] {} window rects in {} ms", wins.len(), t.elapsed().as_millis());
+    crate::log!("[capture] {} window rects in {} ms", wins.len(), t.elapsed().as_millis());
 }
 
 /// Window edges (left, top, right, bottom) -> `[x, y, w, h]` inside one monitor. Drops slivers
@@ -262,7 +262,7 @@ pub fn shown(app: &AppHandle, win: &WebviewWindow) -> u128 {
         let _ = win.set_focus();
     }
     let ms = since_hotkey(app);
-    println!("[capture] {} visible {ms} ms after hotkey", win.label());
+    crate::log!("[capture] {} visible {ms} ms after hotkey", win.label());
     ms
 }
 

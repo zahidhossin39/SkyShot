@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- The History window in a normal browser, with Tauri faked: three coloured shots.
+     Open http://localhost:1430/dev/mock-history.html with the dev server up.
+     `await window.__ready` resolves once the grid is drawn; `__calls` lists invoked commands. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/history.css" />
+    <script>
+      const shot = (c) => {
+        const cv = Object.assign(document.createElement("canvas"), { width: 800, height: 500 });
+        const x = cv.getContext("2d");
+        x.fillStyle = c;
+        x.fillRect(0, 0, 800, 500);
+        return cv.toDataURL();
+      };
+      const imgs = { a: shot("#ef4444"), b: shot("#22c55e"), c: shot("#3b82f6") };
+      let ready;
+      window.__ready = new Promise((r) => (ready = r));
+      window.__calls = [];
+      window.__TAURI_INTERNALS__ = {
+        // "#<path>" kept on the URL so tests can check which file the page asked for.
+        convertFileSrc: (p) => `${imgs[p.split("\\").pop()[0]]}#${p}`,
+        transformCallback: () => 1,
+        invoke: async (cmd) => {
+          window.__calls.push(cmd);
+          if (cmd === "history_list") {
+            setTimeout(() => ready(true));
+            const entries = ["a", "b", "c"].map((id, i) => ({ id, created: Date.now() - i * 60000, width: 800, height: 500, text: `shot ${id}`, starred: false }));
+            return { dir: "C:\history", entries };
+          }
+          return null;
+        },
+      };
+    </script>
+    <script type="module">
+      const html = await (await fetch("/history.html")).text();
+      document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+      await import("/src/history.ts");
+    </script>
+  </head>
+  <body></body>
+</html>

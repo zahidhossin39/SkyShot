@@ -7,17 +7,16 @@ Read `SPEC.md` first. It holds every product decision, the roadmap (v1/v2/v3) an
 - Git co-author line: leave it out (owner, 2026-11-13).
 - GitHub: public repo `zahidhossin39/shutter`, MIT. Ask before every push.
 
-## Status (2026-10-29)
+Status, what's released and the hand-test list: SPEC.md §11.
 
-**v1: all features built.** Owner confirmed capture + blur + copy work. Next phase: **v2, then v3** (owner's call). Install/testing/push are deferred.
+## Testing in the browser pane
 
-Deferred v1 items:
-- Installer builds (`npm run tauri build`, NSIS only, ~1.7 MB). Not installed yet.
-- Untested by hand: Save / Save as, Ctrl+Shift+PrtSc text grab, hotkey rebinding, autostart, multi-monitor, 125/150% DPI.
-- Push to GitHub: needs owner OK + co-author answer.
-- App name: **Shutter** (owner, 2026-11-12). Only the visible name changed; bundle id, exe name and the AI-key vault name stay `screenshot-app` so settings, History and a saved key survive.
-
-v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built: Smart Redact, Live Text + Smart actions, annotations. They're only tested in the browser mock + unit tests; still need a hand test in the real overlay (incl. a link chip actually opening the browser). Merged to main on 2026-11-13 (owner asked, before the hand test). v3 is underway on the same branch, in this order: pin to screen (done) -> zoom loupe + colour picker + window snap (done) -> searchable history (done) -> AI re-read (done; a real transcription still needs the owner's key) -> scrolling capture (done). v3 is complete; everything still needs the owner's hand test. Since then: the capture screen opens and closes without flicker and stays dim before you select (Lightshot-style), and scrolling capture works through the whole of zaidhossain.com (see SPEC.md). 2026-11-18: fixed bars (chat composer) now appear once, the start toast is gone, steps wait only until the page settles, and a Draw (pen) tool was added. Both still need the owner's hand test in the real overlay.
+Before each run:
+1. Start the dev server (`npm run dev`, or `npm run tauri dev`) and stop it when done; a leftover one holds port 1430.
+2. Open `http://localhost:1430/dev/mock-overlay.html` or `/dev/mock-history.html`. They fake Tauri and load the real page's markup, so they never go stale.
+3. Make sure the pane is showing (`tabs_select`). A hidden pane has `innerWidth` 0, freezes animation frames and times scripts out after 45 s.
+4. Start each script with `await window.__ready`, which resolves once the frame or the grid is drawn.
+5. Drive input with dispatched events in physical px divided by `scale()`. Trust `javascript_tool` values over screenshots; the pane scales oddly and screenshots can be stale.
 
 ## How things work (non-obvious)
 
@@ -28,7 +27,6 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 - Overlay windows (`overlay-N`, one per monitor) are pre-created hidden. Frame goes Rust -> page via WebView2 shared memory (`capture::post_frame`, `sharedbufferreceived` event), not IPC: IPC cost ~100 ms for 8 MB.
 - All overlay geometry is physical pixels; `scale() = W / innerWidth`.
 - Redactions are an ops list burned into the canvas, copied to a `base` canvas. Annotations (`notes`, drawn by `annotate.ts`) are redrawn over `base` on every change, so they stay on top. Undo = `history` snapshots of both; it re-blurs only if ops changed.
-- Browser mock pane scales oddly; to see the canvas, draw a downscaled copy into a fixed `<img>` top-left and `zoom` on it. Drive input with dispatched MouseEvents in physical px / scale().
 - OCR (`ocr.rs`): native pass + parallel 2x pixel-doubled pass; 2x result used if median word height < 16 px. `ocr_samples` / `ocr_big_selection` tests need `OCR_SAMPLES` env (sample PNGs were in the session scratchpad; regenerate if needed).
 - `ocr_image` returns `{ text, lines }`: `lines` = word boxes per engine line, in the selection's pixels (2x pass already halved back). `ocr_boxes_match_native_pass` checks that and dumps `<sample>.json` for the JS detector.
 - JS unit tests: `npm test` (node's built-in runner, TS run natively; `*.test.ts` is excluded from tsc).
@@ -43,14 +41,11 @@ v2 work happens on branch `experiment/v2` (owner's call). All v2 parts are built
 - Window dragging (`startDragging`) swallows mouse-up, so the page never sees `dblclick`. Time the presses yourself.
 - Computer-use can't grant the dev build (not an installed app), so the real overlay can't be driven by Claude; ask the owner to hand-test.
 - PowerShell `Get-Content -Raw` reads BOM-less UTF-8 as ANSI and mangles `…`/`×`. Use the Edit tool or `[IO.File]` with UTF8Encoding($false).
-- The browser pane throttles when hidden: screenshots can show stale frames. Trust `javascript_tool` state over screenshots there.
 - Overlay CSS has `[hidden] { display:none !important }` — without it `display:flex` elements ignore `hidden`.
 - Toolbar buttons carry `data-name/data-key/data-desc` for the hover tooltip.
 - The pen uses pointer events and `preventDefault`s pointerdown, so its presses never reach the overlay's mousedown handler. Synthetic PointerEvents can't be captured: stub `Element.prototype.setPointerCapture` when driving the pen from JS.
-- Browser mock of the overlay: `mock-overlay.html` (git-excluded, project root) fakes Tauri + the shared-buffer frame; open `http://localhost:1430/mock-overlay.html` with the dev server up. If missing, rebuild it: `__TAURI_INTERNALS__.invoke` answers `overlay_pending` / `overlay_frame` (dispatch a `sharedbufferreceived` event whose `getBuffer()` returns the RGBA buffer) / `overlay_shown`, `chrome.webview` is an EventTarget with `releaseBuffer`, and the body is copied from overlay.html. The pane must be visible (innerWidth 0 when hidden).
 - Dev server port is 1430, not Tauri's default 1420: the owner's Silent Voice project also uses 1420, and both bound it (IPv4 vs IPv6) so pages loaded from the wrong app.
 - Settings and History share `src/theme.css` tokens (light + dark).
-- Dev testing: `screenshot-app.exe --capture | --text | --close` drives the running instance. Logs: `[capture] ... visible N ms`, `[ocr] WxH: N ms`.
-- UI can be checked in a browser via a temp page that mocks `window.__TAURI_INTERNALS__` and `chrome.webview` (fake frame + invoke stubs), served by the Vite dev server on :1430 (see `mock-overlay.html` below).
+- Dev testing: `screenshot-app.exe --capture | --text | --close` drives the running instance (stop the installed copy first: they share one instance). Logs: `crate::log!` prints and appends to `%APPDATA%\com.zaid-hossain.screenshot-app\logs\shutter.log` (Settings → General → Show logs), so the owner's machine has timings and errors too.
 - Dev profile: deps opt-level 3, own crate opt-level 1 (generic image code was ~20x slower unoptimized). Icon changes need `build.rs` touched to re-embed.
 - PowerShell 5.1: `Set-Content -Encoding utf8` writes a BOM (breaks serde); commit messages with quotes need `git commit -F file`.

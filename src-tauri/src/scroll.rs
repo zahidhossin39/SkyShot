@@ -256,7 +256,7 @@ pub fn run_with(
     let mut guesses = 0; // unmatched steps in a row
     for _ in 0..MAX_STEPS {
         if !scroll(notches) {
-            println!("[scroll] stopped by the user");
+            crate::log!("[scroll] stopped by the user");
             break;
         }
         let (frame, next) = settled(&mut grab, &prev, settle_ms)?;
@@ -271,7 +271,7 @@ pub fn run_with(
         } else if shift.is_some() {
             guesses = 0;
         }
-        println!("[scroll] step: {notches} notch(es), shift {shift:?} (guess fit {fit:?}), height so far {height}");
+        crate::log!("[scroll] step: {notches} notch(es), shift {shift:?} (guess fit {fit:?}), height so far {height}");
         match shift {
             Some(0) => {
                 still += 1;

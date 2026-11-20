@@ -1,4 +1,5 @@
 mod ai;
+mod applog;
 mod capture;
 mod history;
 mod hotkeys;
@@ -65,7 +66,7 @@ fn remember(app: &AppHandle, rgba: Vec<u8>, width: u32, height: u32) {
     let app = app.clone();
     std::thread::spawn(move || {
         if let Err(e) = history::add(&app, rgba, width, height) {
-            eprintln!("[history] save failed: {e}");
+            crate::log!("[history] save failed: {e}");
             return;
         }
         let _ = app.emit_to("history", "history:changed", ());
@@ -217,11 +218,15 @@ async fn finish(app: AppHandle, request: Request<'_>) -> Result<Option<String>, 
         .and_then(|v| v.to_str().ok())
         .unwrap_or("copy")
         .to_string();
+    crate::log!("[finish] {action} {w}x{h}, {} ms after hotkey", capture::since_hotkey(&app));
     capture::close(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let result = output::finish(&app, &action, &rgba, w, h);
         match &result {
-            Err(e) => output::notify(&app, "Something went wrong", e),
+            Err(e) => {
+                crate::log!("[finish] {action} failed: {e}");
+                output::notify(&app, "Something went wrong", e)
+            }
             Ok(None) if action == "saveas" => {} // Save-as cancelled: nothing was finished
             Ok(_) => remember(&app, rgba, w, h),
         }
@@ -284,7 +289,7 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
                 scroll::move_cursor(p.x as i32, p.y as i32);
             }
         scroll::ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
-        println!("[scroll] {x},{y} {w}x{h} -> {:?}", result.as_ref().map(|i| i.dimensions()));
+        crate::log!("[scroll] {x},{y} {w}x{h} -> {:?}", result.as_ref().map(|i| i.dimensions()));
         match result {
             Ok(img) => {
                 let (iw, ih) = img.dimensions();
@@ -446,6 +451,17 @@ fn reset_save_dir(app: AppHandle) -> Result<SettingsView, String> {
     Ok(settings_view(&app))
 }
 
+/// Settings → General → Show logs: the folder with shutter.log, for bug reports.
+#[tauri::command]
+fn open_logs() -> Result<(), String> {
+    let dir = applog::dir().ok_or("No log folder")?;
+    std::process::Command::new("explorer")
+        .arg(dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn open_save_dir(app: AppHandle) -> Result<(), String> {
     let s = app.state::<AppState>().settings.lock().unwrap().clone();
@@ -526,6 +542,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                applog::init(dir.join("logs"));
+            }
             let handle = app.handle();
             let first_run = !settings::exists(handle);
             let s = settings::load(handle);
@@ -586,6 +605,7 @@ pub fn run() {
             pick_save_dir,
             reset_save_dir,
             open_save_dir,
+            open_logs,
             set_autostart,
         ])
         .build(tauri::generate_context!())

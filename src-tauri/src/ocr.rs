@@ -38,14 +38,14 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
     let lines = read_words(rgba, width, height)?;
     if median_height(&lines) < SMALL_TEXT_PX
         && let Some(Ok(big)) = rx.map(|rx| rx.recv()) {
-            println!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
+            crate::log!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
             let mut big = big?;
             for w in big.iter_mut().flatten() {
                 (w.x, w.y, w.w, w.h) = (w.x / 2.0, w.y / 2.0, w.w / 2.0, w.h / 2.0);
             }
             return Ok(Ocr::new(big));
         }
-    println!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
+    crate::log!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
     Ok(Ocr::new(lines))
 }
 
