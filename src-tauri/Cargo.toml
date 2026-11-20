@@ -1,6 +1,6 @@
 [package]
 name = "screenshot-app"
-version = "0.2.2"
+version = "0.2.3"
 description = "Screenshot tool with blur/redact and OCR"
 authors = ["Zaid Hossain"]
 license = "MIT"
