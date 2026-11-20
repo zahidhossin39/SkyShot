@@ -223,6 +223,44 @@ $("ai-key").addEventListener("keydown", (e) => {
 });
 $("ai-remove").addEventListener("click", () => setAi(""));
 
+// ---------------------------------------------------------------- theme
+// "shutter-theme" in localStorage is shared with the History window (same origin); its
+// <head> script applies it before paint and a `storage` listener follows live changes.
+
+type Theme = "system" | "light" | "dark";
+const THEME_KEY = "shutter-theme";
+
+function readTheme(): Theme {
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    if (t === "light" || t === "dark") return t;
+  } catch {}
+  return "system";
+}
+
+function applyTheme(t: Theme) {
+  if (t === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  document.querySelectorAll<HTMLButtonElement>("#theme button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeChoice === t)),
+  );
+}
+
+document.querySelectorAll<HTMLButtonElement>("#theme button").forEach((b) =>
+  b.addEventListener("click", () => {
+    const t = b.dataset.themeChoice as Theme;
+    try {
+      if (t === "system") localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, t);
+    } catch {}
+    applyTheme(t);
+  }),
+);
+window.addEventListener("storage", (e) => {
+  if (e.key === THEME_KEY || e.key === null) applyTheme(readTheme());
+});
+applyTheme(readTheme());
+
 // ---------------------------------------------------------------- pages
 
 const navButtons = document.querySelectorAll<HTMLButtonElement>("nav [data-page]");

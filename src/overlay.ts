@@ -28,7 +28,7 @@ type Drag =
   | { kind: "op"; origin: Point }
   | { kind: "note"; origin: Point } // drawing the last note in `notes`
   | { kind: "notemove"; origin: Point; start: Note }
-  | { kind: "opmove"; origin: Point; start: Rect }
+  | { kind: "opmove"; origin: Point; start: Rect; handle?: Handle } // handle: resizing, not moving
   // Drawing the last note in `notes` with the pen. at: pointer now. still: where it last came to
   // rest (for hold-to-snap). snap: the shape it snapped to, resized while you keep dragging.
   | { kind: "pen"; origin: Point; at: Point; still: Point; straight?: boolean; snap?: { shape: Shape; from: Point } };
@@ -337,6 +337,17 @@ function renderUI() {
     uctx.lineWidth = Math.max(1, Math.round(1.5 * s));
     uctx.strokeRect(pr.x - pd, pr.y - pd, pr.w + 2 * pd, pr.h + 2 * pd);
     uctx.setLineDash([]);
+    // Resize handles on its corners and edges (drawn like the selection's).
+    const hs = Math.round(6 * s);
+    uctx.fillStyle = "#fff";
+    uctx.lineWidth = Math.max(1, Math.round(s));
+    for (const x of [pr.x, pr.x + pr.w / 2, pr.x + pr.w]) {
+      for (const y of [pr.y, pr.y + pr.h / 2, pr.y + pr.h]) {
+        if (x === pr.x + pr.w / 2 && y === pr.y + pr.h / 2) continue;
+        uctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
+        uctx.strokeRect(x - hs / 2 + 0.5, y - hs / 2 + 0.5, hs - 1, hs - 1);
+      }
+    }
   }
 
   if (notes[picked]) {
@@ -415,19 +426,24 @@ function updateChrome() {
     toolbar.querySelector<HTMLButtonElement>('[data-action="undo"]')!.disabled = history.length === 0;
     toolbar.querySelector<HTMLElement>(".swatch")!.style.background = color;
     const opts = toolbar.querySelector<HTMLElement>(".pen-opts")!;
-    opts.hidden = tool !== "pen" && notes[picked]?.kind !== "pen";
+    opts.hidden = colorOpen || (tool !== "pen" && notes[picked]?.kind !== "pen");
+    colorPop.hidden = !colorOpen;
+    colorPop.querySelectorAll<HTMLElement>("[data-color]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.color === color)));
+    if (/^#[0-9a-f]{6}$/i.test(color)) colorCustom.value = color;
     penSizeInput.value = String(penSize);
     penAlphaInput.value = String(Math.round(penAlpha * 100));
     $("pen-size-val").textContent = String(penSize);
     $("pen-alpha-val").textContent = `${Math.round(penAlpha * 100)}%`;
     placeNear(toolbar, sel);
-    if (!opts.hidden) {
-      // Away from the selection when there's room, so the panel doesn't cover the image.
-      const tb = toolbar.getBoundingClientRect();
-      const below = tb.top >= (sel.y + sel.h) / s ? tb.bottom + 48 < window.innerHeight : tb.top < 48;
-      opts.classList.toggle("below", below);
-      opts.style.left = `${toolbar.querySelector<HTMLElement>('[data-tool="pen"]')!.getBoundingClientRect().left - tb.left}px`;
-    }
+    // Panels sit away from the selection when there's room, so they don't cover the image.
+    const tb = toolbar.getBoundingClientRect();
+    const place = (el: HTMLElement, anchor: string, height: number) => {
+      const below = tb.top >= (sel!.y + sel!.h) / s ? tb.bottom + height < window.innerHeight : tb.top < height;
+      el.classList.toggle("below", below);
+      el.style.left = `${toolbar.querySelector<HTMLElement>(anchor)!.getBoundingClientRect().left - tb.left}px`;
+    };
+    if (!opts.hidden) place(opts, '[data-tool="pen"]', 48);
+    if (colorOpen) place(colorPop, '[data-action="color"]', 96);
   }
   if (!panel.hidden && sel) placePanel();
 }
@@ -580,6 +596,7 @@ function reset() {
   history = [];
   picked = -1;
   pickedOp = null;
+  colorOpen = false;
   editing = null;
   windows = [];
   hoverWin = null;
@@ -915,14 +932,51 @@ function commitNoteInput(keep = true) {
   renderUI();
 }
 
-function cycleColor() {
-  color = COLORS[(COLORS.indexOf(color) + 1) % COLORS.length];
+/** New colour for new marks, and for the picked note. `snap` false while dragging around the
+ * custom picker, so the whole drag is one undo step. */
+function setColor(c: string, snap = true) {
+  color = c;
   if (editing) noteInput.style.color = color;
   else if (notes[picked]) {
-    snapshot();
+    if (snap) snapshot();
     notes[picked] = { ...notes[picked], color };
     drawNotes();
   }
+  updateChrome();
+}
+
+function cycleColor() {
+  setColor(COLORS[(COLORS.indexOf(color) + 1) % COLORS.length]);
+}
+
+// ---------------------------------------------------------------- colour palette
+const colorPop = toolbar.querySelector<HTMLElement>(".color-pop")!;
+const colorCustom = $<HTMLInputElement>("color-custom");
+let colorOpen = false;
+toolbar.querySelector(".color-grid")!.append(
+  ...COLORS.map((c) => {
+    const b = Object.assign(document.createElement("button"), { title: c });
+    b.style.background = c;
+    b.dataset.color = c;
+    b.setAttribute("aria-label", c);
+    return b;
+  }),
+);
+colorPop.addEventListener("click", (e) => {
+  const c = (e.target as HTMLElement).closest<HTMLElement>("[data-color]")?.dataset.color;
+  if (!c) return;
+  setColor(c);
+  toggleColors(false);
+});
+let customSnapped = false;
+colorCustom.addEventListener("input", () => {
+  setColor(colorCustom.value, !customSnapped);
+  customSnapped = true;
+});
+colorCustom.addEventListener("change", () => (customSnapped = false));
+
+function toggleColors(open = !colorOpen) {
+  colorOpen = open;
   updateChrome();
 }
 
@@ -1044,6 +1098,7 @@ function setTool(t: Tool) {
 
 ui.addEventListener("mousedown", (e) => {
   if (e.button !== 0 || busy) return;
+  if (colorOpen) toggleColors(false); // a click on the image closes the palette
   const p = toPhys(e);
   if (smart) {
     smartClick(p);
@@ -1056,9 +1111,17 @@ ui.addEventListener("mousedown", (e) => {
   if (editable && tool === "pen" && inside(p, sel!)) return; // the pen uses pointer events (below)
   const hit = editable && tool === "select" ? noteAt(vctx, notes, p, scale()) : -1;
   // Notes sit above redactions, so a note under the pointer wins.
+  // A picked redaction's handles come first: they can sit on the selection's own edge.
+  const prevOp = pickedOp;
+  const prevRect = pickedRect();
+  const opHandle = editable && tool === "select" && prevRect ? handleAt(p, prevRect) : null;
   const opHit = editable && tool === "select" && hit < 0 && inside(p, sel!) && !handleAt(p, sel!) ? opAt(p) : null;
   pickedOp = null;
-  if (editable && isNote(tool) && tool !== "pen" && inside(p, sel!)) {
+  if (opHandle && prevOp && prevRect) {
+    pickedOp = prevOp;
+    snapshot(); // dropped on mouseup if the size didn't change
+    drag = { kind: "opmove", origin: p, start: { ...prevRect }, handle: opHandle };
+  } else if (editable && isNote(tool) && tool !== "pen" && inside(p, sel!)) {
     picked = -1;
     if (tool === "text") {
       e.preventDefault(); // keep focus in the textarea we're about to show
@@ -1121,7 +1184,8 @@ window.addEventListener("mousemove", (e) => {
     if (smart) {
       cursor = overWord(p) ? "pointer" : "default";
     } else if (mode === "capture" && sel && tool === "select") {
-      const h = handleAt(p, sel);
+      const pr = pickedRect();
+      const h = (pr && handleAt(p, pr)) || handleAt(p, sel);
       cursor = h ? CURSORS[h] : inside(p, sel) || noteAt(vctx, notes, p, scale()) >= 0 ? "move" : "crosshair";
     } else if (tool === "text" && sel && inside(p, sel)) {
       cursor = "text";
@@ -1166,6 +1230,17 @@ window.addEventListener("mousemove", (e) => {
   } else if (drag.kind === "notemove") {
     notes[picked] = moved(drag.start, dx, dy);
     drawNotes();
+  } else if (drag.kind === "opmove" && drag.handle && pickedOp && sel) {
+    const s0 = drag.start;
+    const min = 4 * scale();
+    let x0 = s0.x, y0 = s0.y, x1 = s0.x + s0.w, y1 = s0.y + s0.h;
+    // Each dragged edge stops `min` short of the opposite one, so the box never flips or vanishes.
+    if (drag.handle.includes("w")) x0 = Math.min(x0 + dx, x1 - min);
+    if (drag.handle.includes("e")) x1 = Math.max(x1 + dx, x0 + min);
+    if (drag.handle.includes("n")) y0 = Math.min(y0 + dy, y1 - min);
+    if (drag.handle.includes("s")) y1 = Math.max(y1 + dy, y0 + min);
+    setOpRect(pickedOp, clampTo({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, sel));
+    renderImageSoon();
   } else if (drag.kind === "opmove" && pickedOp && sel) {
     const r = drag.start; // stays inside the selection, where it was drawn
     const x = Math.max(sel.x, Math.min(sel.x + sel.w - r.w, r.x + dx));
@@ -1204,7 +1279,7 @@ window.addEventListener("mouseup", () => {
   if (d.kind === "notemove" && JSON.stringify(notes[picked]) === JSON.stringify(d.start)) history.pop(); // just a click
   if (d.kind === "opmove") {
     const r = pickedRect();
-    if (r && r.x === d.start.x && r.y === d.start.y) history.pop(); // just a click
+    if (r && r.x === d.start.x && r.y === d.start.y && r.w === d.start.w && r.h === d.start.h) history.pop(); // just a click
     else renderImage(); // the last move, not just the last frame
   }
   updateChrome();
@@ -1333,6 +1408,7 @@ window.addEventListener("keydown", (e) => {
     updateChrome();
     return void e.preventDefault();
   }
+  if (e.key === "Escape" && colorOpen) return void toggleColors(false);
   if (e.key === "Escape") return void close();
   if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.altKey && !e.metaKey && (!sel || drag)) {
     loupeOn = !loupeOn;
@@ -1353,7 +1429,7 @@ window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && k === "c") return getSelection()?.isCollapsed === false ? false : (finish("copy"), true);
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
-    if (k === "enter") return finish("both"), true;
+    if (k === "enter") return finish("save"), true;
     if ((k === "delete" || k === "backspace") && (notes[picked] || pickedRect())) return deletePicked(), true;
     if (k === "c") return cycleColor(), true;
     if (k === "f") return pin(), true;
@@ -1379,12 +1455,11 @@ toolbar.addEventListener("click", (e) => {
     case "undo": return undo();
     case "ocr": return void extractText();
     case "smart": return void startSmart();
-    case "color": return cycleColor();
+    case "color": return toggleColors();
     case "pin": return void pin();
     case "scroll": return void scrollCapture();
     case "copy":
     case "save":
-    case "both":
     case "saveas": return void finish(btn.dataset.action);
     case "close": return void close();
   }

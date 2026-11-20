@@ -14,7 +14,19 @@ const count = $("count");
 const empty = $("empty");
 const toast = $("toast");
 
-let dir = "";
+// Theme chosen in Settings (shared localStorage); the <head> script handles first paint.
+function syncTheme() {
+  let t: string | null = null;
+  try {
+    t = localStorage.getItem("shutter-theme");
+  } catch {}
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+window.addEventListener("storage", (e) => {
+  if (e.key === "shutter-theme" || e.key === null) syncTheme();
+});
+
 let entries: Entry[] = [];
 let toastTimer = 0;
 
@@ -42,8 +54,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEl
   return e;
 }
 
+/** History images come through the app's own `shot` protocol (see lib.rs). */
+const shot = (name: string) => convertFileSrc(name, "shot");
+
 function card(e: Entry, query: string) {
-  const img = el("img", { loading: "lazy", alt: "", src: convertFileSrc(`${dir}\\${e.id}.thumb.png`) });
+  const img = el("img", { loading: "lazy", alt: "", src: shot(`${e.id}.thumb.png`) });
   const thumb = el("button", { className: "thumb", title: "View" }, img);
   thumb.onclick = () => view(e);
 
@@ -109,7 +124,7 @@ function view(e: Entry | null) {
   viewing = e;
   viewer.hidden = !e;
   if (!e) return;
-  viewerImg.src = convertFileSrc(`${dir}\\${e.id}.png`);
+  viewerImg.src = shot(`${e.id}.png`);
   const i = shown.indexOf(e);
   $("viewer-info").textContent = `${when(e.created)} · ${e.width}×${e.height}`;
   $<HTMLButtonElement>("viewer-prev").disabled = i <= 0;
@@ -139,8 +154,7 @@ function render() {
 }
 
 async function load() {
-  const view = await invoke<{ dir: string; entries: Entry[] }>("history_list");
-  dir = view.dir;
+  const view = await invoke<{ entries: Entry[] }>("history_list");
   entries = view.entries;
   render();
 }

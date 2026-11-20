@@ -56,7 +56,8 @@ pub fn notify(app: &AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
 
-/// action: "copy" | "save" | "both" | "saveas". Returns the saved path, if any.
+/// action: "copy" (clipboard only) | "save" / "saveas" (save, and copy too: one click does both)
+/// | "both" (older name for save). Returns the saved path, if any.
 pub fn finish(
     app: &AppHandle,
     action: &str,
@@ -64,7 +65,8 @@ pub fn finish(
     width: u32,
     height: u32,
 ) -> Result<Option<String>, String> {
-    if matches!(action, "copy" | "both") {
+    // Save as copies only once a file was picked, so a cancelled dialog changes nothing.
+    if matches!(action, "copy" | "save" | "both") {
         copy_image(rgba, width, height)?;
     }
     let path = match action {
@@ -86,8 +88,11 @@ pub fn finish(
         _ => None,
     };
     if let Some(p) = &path {
+        if action == "saveas" {
+            copy_image(rgba, width, height)?;
+        }
         save_png(p, rgba, width, height)?;
-        let what = if action == "both" { "Copied and saved" } else { "Saved" };
+        let what = "Saved and copied";
         notify(app, what, &p.display().to_string());
     }
     Ok(path.map(|p| p.display().to_string()))

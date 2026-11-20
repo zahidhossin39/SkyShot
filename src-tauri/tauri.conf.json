@@ -12,13 +12,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": [
-          "$APPDATA/history/**"
-        ]
-      }
+      "csp": null
     }
   },
   "bundle": {

@@ -46,9 +46,16 @@
         <button data-tool="step" data-name="Steps" data-key="N" data-desc="Click to add numbered badges: 1, 2, 3… They renumber if you delete one.">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M11 9.5l1.5-1V16" /></svg>
         </button>
-        <button data-action="color" data-name="Colour" data-key="C" data-desc="Change colour for new marks, or for the selected one.">
+        <button data-action="color" data-name="Colour" data-key="C" data-desc="Pick a colour for new marks, or for the selected one. C steps through the palette.">
           <span class="swatch"></span>
         </button>
+        <div class="color-pop" role="dialog" aria-label="Colours" hidden>
+          <div class="color-grid"></div>
+          <label class="color-custom" data-name="Any colour" data-desc="Open the colour picker for any colour you like.">
+            <input type="color" id="color-custom" aria-label="Any colour" />
+            <span>Custom</span>
+          </label>
+        </div>
         <div class="pen-opts" hidden>
           <label data-name="Thickness" data-key="[ ]" data-desc="How thick the pen draws, for new strokes or the selected one.">
             <input type="range" id="pen-size" min="1" max="30" step="1" />
@@ -84,16 +91,15 @@
         </button>
       </div>
       <div class="group" role="group" aria-label="Finish">
-        <button data-action="copy" class="label" data-name="Copy" data-key="Ctrl+C" data-desc="Copy the image to the clipboard.">Copy</button>
-        <button data-action="save" class="label" data-name="Save" data-desc="Save a PNG to your screenshots folder.">Save</button>
-        <button data-action="both" class="label primary" data-name="Copy & save" data-key="Enter" data-desc="Copy to the clipboard and save a PNG.">Copy &amp; save</button>
+        <button data-action="copy" class="label" data-name="Copy" data-key="Ctrl+C" data-desc="Copy the image to the clipboard. Nothing is saved.">Copy</button>
+        <button data-action="save" class="label primary" data-name="Save" data-key="Enter" data-desc="Save a PNG to your screenshots folder, and copy it too.">Save</button>
         <button data-action="scroll" data-name="Scrolling capture" data-key="L" data-desc="Capture a long page or chat: the selected area scrolls by itself and the shots are stitched into one tall image (copied and saved to History). Hands off while it runs; move the mouse or press Esc to stop early. Marks you drew here are not included.">
           <svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2" /><path d="M12 8v8M9 13l3 3 3-3" /></svg>
         </button>
         <button data-action="pin" data-name="Pin to screen" data-key="F" data-desc="Float this shot on top of everything as a reference. Drag to move, scroll to zoom, Esc to close.">
           <svg viewBox="0 0 24 24"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z" /><path d="M12 14v6" /></svg>
         </button>
-        <button data-action="saveas" data-name="Save as…" data-key="Ctrl+S" data-desc="Pick a folder and file name.">
+        <button data-action="saveas" data-name="Save as…" data-key="Ctrl+S" data-desc="Pick a folder and file name (also copies it).">
           <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h7V4M8 20v-6h8v6" /></svg>
         </button>
       </div>

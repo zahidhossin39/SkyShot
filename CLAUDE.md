@@ -39,6 +39,7 @@ Before each run:
 - zaidhossain.com is the hard scroll-capture case: fade-ins, an accordion that expands on scroll, a sticky column, a pinned section. Notepad's near-identical lines are the other hard case (repeating rows). Check both after any change to `scroll.rs`.
 - Run `cargo test` with `CARGO_TARGET_DIR=target\test` while `tauri dev` runs, or the two fight over the build lock. The dev watcher rebuilds between quick edits; a linker error (LNK2019) after that means a corrupt incremental build. Fix: stop dev, `cargo clean -p screenshot-app`.
 - Window dragging (`startDragging`) swallows mouse-up, so the page never sees `dblclick`. Time the presses yourself.
+- Never start or restart the owner's installed Shutter from Claude's tools (nor let the updater restart it from there). Claude desktop is a packaged (MSIX) app, so its child processes get AppData virtualized: new files land in `AppData\Local\Packages\Claude_*\LocalCache\Roaming\…` and settings diverge. That made every History image 403 in 0.2.2 (fixed by the `shot://` protocol). Stop it if needed, then ask the owner to start it from the Start menu.
 - Computer-use can't grant the dev build (not an installed app), so the real overlay can't be driven by Claude; ask the owner to hand-test.
 - PowerShell `Get-Content -Raw` reads BOM-less UTF-8 as ANSI and mangles `…`/`×`. Use the Edit tool or `[IO.File]` with UTF8Encoding($false).
 - Overlay CSS has `[hidden] { display:none !important }` — without it `display:flex` elements ignore `hidden`.

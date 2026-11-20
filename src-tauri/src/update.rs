@@ -40,7 +40,7 @@ pub fn check_on_start(app: &AppHandle) {
             crate::output::notify(
                 &app,
                 &format!("Shutter {} is available", u.version),
-                "Open Settings → General to update.",
+                "Open Settings (tray icon) → Settings to update.",
             );
         }
     });

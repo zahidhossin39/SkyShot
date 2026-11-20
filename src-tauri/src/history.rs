@@ -146,9 +146,27 @@ pub fn image_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     p.exists().then_some(p).ok_or_else(|| "file missing".into())
 }
 
+/// A file the History window may load: `<id>.png` or `<id>.thumb.png`, nothing else.
+pub fn file_for(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    image_name_ok(name).then(|| dir(app).join(name)).ok_or_else(|| "not a history image".into())
+}
+
+fn image_name_ok(name: &str) -> bool {
+    name.strip_suffix(".thumb.png").or_else(|| name.strip_suffix(".png")).is_some_and(valid_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_protocol_serves_only_history_images() {
+        assert!(image_name_ok("20261121-011732-321.png"));
+        assert!(image_name_ok("20261121-011732-321.thumb.png"));
+        for bad in ["index.json", "../settings.json", r"..\settings.png", "a/b.png", "C:x.png", ".png", "x.txt"] {
+            assert!(!image_name_ok(bad), "{bad}");
+        }
+    }
 
     fn entry(id: &str, days_old: i64, starred: bool) -> Entry {
         Entry { id: id.into(), created: 100 * 86_400_000 - days_old * 86_400_000, width: 1, height: 1, text: String::new(), starred }

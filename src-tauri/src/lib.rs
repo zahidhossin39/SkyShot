@@ -451,7 +451,7 @@ fn reset_save_dir(app: AppHandle) -> Result<SettingsView, String> {
     Ok(settings_view(&app))
 }
 
-/// Settings → General → Show logs: the folder with shutter.log, for bug reports.
+/// Settings → Settings page → Show logs: the folder with shutter.log, for bug reports.
 #[tauri::command]
 fn open_logs() -> Result<(), String> {
     let dir = applog::dir().ok_or("No log folder")?;
@@ -537,6 +537,25 @@ pub fn run() {
                 .with_handler(hotkeys::on_shortcut)
                 .build(),
         )
+        // History images: shot://<id>.png / <id>.thumb.png (http://shot.localhost/… on Windows).
+        // Read with plain file access, not the asset protocol: that one compares canonical paths,
+        // and Windows can keep files somewhere else (a launch from a packaged app virtualizes
+        // AppData), which gave every thumbnail a 403. Off the main thread: History loads dozens.
+        .register_asynchronous_uri_scheme_protocol("shot", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            std::thread::spawn(move || {
+                let name = request.uri().path().trim_start_matches('/').to_string();
+                let file = history::file_for(&app, &name).and_then(|p| std::fs::read(p).map_err(|e| e.to_string()));
+                let response = match file {
+                    Ok(bytes) => tauri::http::Response::builder()
+                        .header("Content-Type", "image/png")
+                        .header("Cache-Control", "max-age=31536000, immutable") // an id's image never changes
+                        .body(bytes),
+                    Err(_) => tauri::http::Response::builder().status(404).body(Vec::new()),
+                };
+                responder.respond(response.unwrap());
+            });
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())

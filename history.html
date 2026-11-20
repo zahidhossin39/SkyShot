@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shutter — History</title>
+    <script>
+      // Apply the saved theme before first paint (no flash). Same key as settings.ts / history.ts.
+      try {
+        var t = localStorage.getItem("shutter-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <link rel="stylesheet" href="/src/history.css" />
     <script type="module" src="/src/history.ts" defer></script>
   </head>

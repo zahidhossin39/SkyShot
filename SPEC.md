@@ -228,7 +228,7 @@ Released: v0.2.1 on GitHub (installer + auto-update). Every feature in §6 is bu
 
 Never hand-tested in the real app (the owner's list; tick off here, nowhere else):
 - Draw (pen), scrolling capture on a real page, Live Text link chips opening the browser
-- Moving / deleting a blur, the History viewer (added 2026-11-20)
+- Moving, resizing and deleting a blur, the History viewer, the colour palette and custom picker, the light/dark theme
 - Save as, Ctrl+Shift+PrtSc text grab, hotkey rebinding, autostart
 - Multi-monitor, 125% / 150% display scaling
 - AI re-read with a real key
@@ -244,4 +244,11 @@ Naming: the visible name is **Shutter** (2026-11-12). The bundle id, exe name an
 - Settings always opens on Shortcuts (the first page), not the last page you visited. Owner's call.
 - History: click a thumbnail to view the full image in the window (← → step, Ctrl+C / Copy, Esc or click outside closes). Copy stays on the Copy button.
 - Redactions (blur, pixelate, black box) can be picked with Select (V): drag to move, Del to delete, Ctrl+Z undoes. Notes stay on top and win a click. Moving re-renders from the original, so the old spot is clean; a redaction stays inside the selection.
+
+## Owner fixes (2026-11-21)
+- History images load through the app's own `shot://` protocol (plain file reads, ids checked), not Tauri's asset protocol, which compares canonical paths and refused files Windows had stored elsewhere (virtualized AppData). The asset protocol is now off.
+- Finish buttons: **Copy** copies only; **Save** (Enter, primary) saves and copies; Save as also copies once a file is picked. The "Copy & save" button is gone.
+- A picked blur / pixelate / black box shows 8 resize handles; edges stop 4 px short of each other so a box never flips; stays inside the selection.
+- Colour: 12 swatches (round the wheel, then white, grey, black, brown) plus Custom (the system colour picker), from the Colour button; C still steps through the palette. Step badges pick dark text on light colours.
+- Settings: the "General" page is now **Settings** (gear icon) with a Theme row: System / Light / Dark, stored in localStorage `shutter-theme`, applied live to Settings and History.
 

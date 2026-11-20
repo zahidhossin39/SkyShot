@@ -385,6 +385,38 @@ input[type="password"]:focus {
   transform: translateX(19px);
 }
 
+/* Segmented control (System / Light / Dark). */
+.seg {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--field);
+}
+
+.seg button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+
+.seg button:hover {
+  background: var(--hover);
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
 button.link {
   margin-top: 10px;
   padding: 2px 0;

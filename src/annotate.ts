@@ -17,7 +17,18 @@ export type Note =
   | { kind: "pen"; color: string; size: number; alpha?: number; pts: InkPoint[]; pen: boolean; shape?: boolean };
 export type NoteKind = Note["kind"];
 
-export const COLORS = ["#ef4444", "#facc15", "#22c55e", "#3b82f6", "#18181b"];
+// Red first (the default). Ordered round the colour wheel, then white, grey, black.
+export const COLORS = [
+  "#ef4444", "#f97316", "#facc15", "#22c55e", "#14b8a6", "#3b82f6",
+  "#8b5cf6", "#ec4899", "#ffffff", "#9ca3af", "#18181b", "#78350f",
+];
+
+/** Light colours (yellow, white…) need dark text on top. */
+export function isLight(hex: string) {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160;
+}
 export const FONT_PX = 18;
 const LINE = 1.25;
 const STEP_R = 13;
@@ -79,7 +90,7 @@ export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: 
       c.arc(n.at.x, n.at.y, STEP_R * s, 0, Math.PI * 2);
       c.fill();
       c.shadowColor = "transparent";
-      c.fillStyle = n.color === COLORS[1] ? "#18181b" : "#fff"; // dark number on yellow
+      c.fillStyle = isLight(n.color) ? "#18181b" : "#fff"; // dark number on light badges
       c.font = `700 ${14 * s}px "Segoe UI", sans-serif`;
       c.textAlign = "center";
       c.textBaseline = "middle";

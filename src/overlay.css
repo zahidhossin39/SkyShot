@@ -349,7 +349,8 @@ button.chip {
 
 /* Pen sliders (shown while drawing or with a stroke picked): a small panel attached to the
    toolbar by the Draw button, so the toolbar itself doesn't grow (it's ~950 px already). */
-.pen-opts {
+.pen-opts,
+.color-pop {
   position: absolute;
   bottom: calc(100% + 6px);
   display: flex;
@@ -363,7 +364,8 @@ button.chip {
   white-space: nowrap;
 }
 
-.pen-opts.below {
+.pen-opts.below,
+.color-pop.below {
   bottom: auto;
   top: calc(100% + 6px);
 }
@@ -496,4 +498,53 @@ button.chip {
   #textpanel {
     animation: none;
   }
+}
+
+/* Colour palette: opens from the Colour button. Same panel as the pen sliders. */
+.color-pop {
+  height: auto;
+  padding: 8px;
+  gap: 10px;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 22px);
+  gap: 6px;
+}
+
+.color-grid button {
+  min-width: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.3);
+}
+
+.color-grid button[aria-pressed="true"] {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.color-custom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid var(--bar-line);
+  color: var(--bar-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.color-custom input {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
 }
