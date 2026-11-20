@@ -229,3 +229,72 @@ button:focus-visible {
   color: #f4f4f5;
   box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
 }
+
+/* ---------------------------------------------------------------- viewer */
+
+#viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  background: rgba(9, 9, 11, 0.88);
+  animation: fade 120ms ease-out;
+}
+
+#viewer-img {
+  max-width: 100%;
+  max-height: calc(100% - 56px);
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.7);
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #18181b;
+  color: #ececef;
+}
+
+.viewer-bar button {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.viewer-bar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.viewer-bar button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+#viewer-info {
+  padding: 0 8px;
+  font-size: 12px;
+  color: #a1a1aa;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}

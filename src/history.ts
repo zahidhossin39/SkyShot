@@ -44,8 +44,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEl
 
 function card(e: Entry, query: string) {
   const img = el("img", { loading: "lazy", alt: "", src: convertFileSrc(`${dir}\\${e.id}.thumb.png`) });
-  const thumb = el("button", { className: "thumb", title: "Copy image" }, img);
-  thumb.onclick = () => copy(e);
+  const thumb = el("button", { className: "thumb", title: "View" }, img);
+  thumb.onclick = () => view(e);
 
   const star = el("button", { className: "star", textContent: e.starred ? "★" : "☆", title: e.starred ? "Starred: kept forever" : "Star to keep forever" });
   star.setAttribute("aria-pressed", String(e.starred));
@@ -97,9 +97,39 @@ async function copy(e: Entry) {
   }
 }
 
+// ---------------------------------------------------------------- viewer
+// Full image right here, not in Explorer. ← → step through what the grid shows.
+
+const viewer = $("viewer");
+const viewerImg = $<HTMLImageElement>("viewer-img");
+let viewing: Entry | null = null;
+let shown: Entry[] = [];
+
+function view(e: Entry | null) {
+  viewing = e;
+  viewer.hidden = !e;
+  if (!e) return;
+  viewerImg.src = convertFileSrc(`${dir}\\${e.id}.png`);
+  const i = shown.indexOf(e);
+  $("viewer-info").textContent = `${when(e.created)} · ${e.width}×${e.height}`;
+  $<HTMLButtonElement>("viewer-prev").disabled = i <= 0;
+  $<HTMLButtonElement>("viewer-next").disabled = i < 0 || i >= shown.length - 1;
+}
+
+function step(d: number) {
+  const i = viewing ? shown.indexOf(viewing) : -1;
+  if (i >= 0 && shown[i + d]) view(shown[i + d]);
+}
+
+$("viewer-prev").onclick = () => step(-1);
+$("viewer-next").onclick = () => step(1);
+$("viewer-copy").onclick = () => viewing && copy(viewing);
+$("viewer-close").onclick = () => view(null);
+viewer.addEventListener("click", (ev) => ev.target === viewer && view(null)); // click the backdrop
+
 function render() {
   const query = q.value.trim();
-  const shown = entries.filter((e) => (!onlyStarred.checked || e.starred) && matches(e.text, query));
+  shown = entries.filter((e) => (!onlyStarred.checked || e.starred) && matches(e.text, query));
   grid.replaceChildren(...shown.map((e) => card(e, query)));
   count.textContent = query || onlyStarred.checked ? `${shown.length} of ${entries.length}` : `${entries.length} shots`;
   empty.hidden = shown.length > 0;
@@ -118,6 +148,14 @@ async function load() {
 q.addEventListener("input", render);
 onlyStarred.addEventListener("change", render);
 window.addEventListener("keydown", (e) => {
+  if (viewing) {
+    if (e.key === "Escape") view(null);
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === "ArrowRight") step(1);
+    else if (e.ctrlKey && e.key.toLowerCase() === "c") copy(viewing);
+    else return;
+    return e.preventDefault();
+  }
   if ((e.ctrlKey && e.key.toLowerCase() === "f") || (e.key === "/" && document.activeElement !== q)) {
     e.preventDefault();
     q.focus();

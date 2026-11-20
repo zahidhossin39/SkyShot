@@ -28,6 +28,7 @@ type Drag =
   | { kind: "op"; origin: Point }
   | { kind: "note"; origin: Point } // drawing the last note in `notes`
   | { kind: "notemove"; origin: Point; start: Note }
+  | { kind: "opmove"; origin: Point; start: Rect }
   // Drawing the last note in `notes` with the pen. at: pointer now. still: where it last came to
   // rest (for hold-to-snap). snap: the shape it snapped to, resized while you keep dragging.
   | { kind: "pen"; origin: Point; at: Point; still: Point; straight?: boolean; snap?: { shape: Shape; from: Point } };
@@ -77,6 +78,9 @@ let smart: Smart | null = null;
 let live: { el: HTMLElement; text: string }[][] | null = null;
 let notes: Note[] = [];
 let picked = -1; // selected note, for move / delete / recolour
+/** Selected redaction (one rect of one op), for move / delete. Moving re-renders from the
+ * original, so the old spot is clean again (nothing burned in until you finish). */
+let pickedOp: { op: number; rect: number } | null = null;
 let color = COLORS[0];
 let penSize = 5; // CSS px
 let penAlpha = 1;
@@ -206,6 +210,33 @@ function renderImage() {
   drawNotes();
 }
 
+let imageQueued = false;
+/** renderImage at most once a frame (re-blurring every op on each mouse move is too much). */
+function renderImageSoon() {
+  if (imageQueued) return;
+  imageQueued = true;
+  requestAnimationFrame(() => {
+    imageQueued = false;
+    renderImage();
+  });
+}
+
+/** Topmost redaction rect under `p`. */
+function opAt(p: Point): { op: number; rect: number } | null {
+  for (let i = ops.length - 1; i >= 0; i--) {
+    for (let j = ops[i].rects.length - 1; j >= 0; j--) if (inside(p, ops[i].rects[j])) return { op: i, rect: j };
+  }
+  return null;
+}
+
+const pickedRect = () => (pickedOp ? ops[pickedOp.op]?.rects[pickedOp.rect] : undefined);
+
+/** Replaces one rect; a new op object, so undo snapshots (shallow copies of `ops`) keep the old one. */
+function setOpRect(at: { op: number; rect: number }, r: Rect) {
+  const op = ops[at.op];
+  ops[at.op] = { ...op, rects: op.rects.map((x, j) => (j === at.rect ? r : x)) };
+}
+
 /** Annotations changed: base + every note. Cheap, so it runs on every mouse move. */
 function drawNotes() {
   vctx.drawImage(base, 0, 0);
@@ -229,9 +260,10 @@ function addRedaction(op: Op) {
 function undo() {
   const prev = history.pop();
   if (!prev) return;
-  const redactionsChanged = prev.ops.length !== ops.length;
+  const redactionsChanged = prev.ops.length !== ops.length || prev.ops.some((o, i) => o !== ops[i]);
   ({ ops, notes } = prev);
   picked = -1;
+  pickedOp = null;
   if (redactionsChanged) renderImage();
   else drawNotes();
   updateChrome();
@@ -297,6 +329,16 @@ function renderUI() {
     uctx.stroke();
   }
 
+  const pr = pickedRect();
+  if (pr) {
+    const pd = 3 * s;
+    uctx.setLineDash([4 * s, 3 * s]);
+    uctx.strokeStyle = ACCENT;
+    uctx.lineWidth = Math.max(1, Math.round(1.5 * s));
+    uctx.strokeRect(pr.x - pd, pr.y - pd, pr.w + 2 * pd, pr.h + 2 * pd);
+    uctx.setLineDash([]);
+  }
+
   if (notes[picked]) {
     const b = noteBox(vctx, notes[picked], s);
     const pd = 5 * s;
@@ -333,6 +375,8 @@ function updateChrome() {
       ? `${mode === "text" ? "Drag over text to copy it" : "Drag to select an area"}${SEP}Click a window to grab it${SEP}<kbd>Z</kbd> ${loupeOn ? "hide zoom" : "zoom"}${loupeOn ? `${SEP}<kbd>C</kbd> copy colour` : ""}${SEP}<kbd>Esc</kbd> cancel`
       : editing
       ? `Type your text${SEP}<kbd>Enter</kbd> done${SEP}<kbd>Shift+Enter</kbd> new line${SEP}<kbd>Esc</kbd> discard`
+      : pickedRect() && tool === "select"
+      ? `Drag to move${SEP}<kbd>Del</kbd> delete`
       : notes[picked] && tool === "select"
       ? `Drag to move${SEP}<kbd>Del</kbd> delete${SEP}<kbd>C</kbd> colour${SEP}Double-click text to edit`
       : has && mode === "capture" && tool !== "select"
@@ -503,6 +547,7 @@ async function open(p: OpenPayload) {
     notes = [];
     history = [];
     picked = -1;
+    pickedOp = null;
     smart = null;
     tool = "select";
     renderUI();
@@ -534,6 +579,7 @@ function reset() {
   notes = [];
   history = [];
   picked = -1;
+  pickedOp = null;
   editing = null;
   windows = [];
   hoverWin = null;
@@ -777,6 +823,7 @@ async function startSmart() {
   const r = sel;
   const s: Smart = { words: [], picks: [], loading: true };
   smart = s;
+  pickedOp = null;
   closeText();
   updateChrome();
   renderUI();
@@ -905,6 +952,18 @@ for (const el of [penSizeInput, penAlphaInput]) {
 }
 
 function deletePicked() {
+  if (pickedOp && pickedRect()) {
+    snapshot();
+    const { op, rect } = pickedOp;
+    const rects = ops[op].rects.filter((_, j) => j !== rect);
+    if (rects.length) ops[op] = { ...ops[op], rects };
+    else ops.splice(op, 1);
+    pickedOp = null;
+    renderImage();
+    updateChrome();
+    renderUI();
+    return;
+  }
   if (!notes[picked]) return;
   snapshot();
   notes.splice(picked, 1);
@@ -977,6 +1036,7 @@ async function copyHex() {
 function setTool(t: Tool) {
   tool = t;
   picked = -1;
+  pickedOp = null;
   if (t !== "select") closeText(); // the Live Text layer would catch the drag
   updateChrome();
   renderUI();
@@ -995,6 +1055,9 @@ ui.addEventListener("mousedown", (e) => {
   const editable = mode === "capture" && sel;
   if (editable && tool === "pen" && inside(p, sel!)) return; // the pen uses pointer events (below)
   const hit = editable && tool === "select" ? noteAt(vctx, notes, p, scale()) : -1;
+  // Notes sit above redactions, so a note under the pointer wins.
+  const opHit = editable && tool === "select" && hit < 0 && inside(p, sel!) && !handleAt(p, sel!) ? opAt(p) : null;
+  pickedOp = null;
   if (editable && isNote(tool) && tool !== "pen" && inside(p, sel!)) {
     picked = -1;
     if (tool === "text") {
@@ -1017,6 +1080,11 @@ ui.addEventListener("mousedown", (e) => {
     if (n.kind === "pen") [penSize, penAlpha] = [n.size, n.alpha ?? 1];
     snapshot(); // dropped on mouseup if it didn't actually move
     drag = { kind: "notemove", origin: p, start: notes[hit] };
+  } else if (opHit) {
+    picked = -1;
+    pickedOp = opHit;
+    snapshot(); // dropped on mouseup if it didn't actually move
+    drag = { kind: "opmove", origin: p, start: { ...pickedRect()! } };
   } else if (editable && tool === "select" && inside(p, sel!)) {
     picked = -1;
     drag = { kind: "move", origin: p, start: { ...sel! } };
@@ -1098,6 +1166,12 @@ window.addEventListener("mousemove", (e) => {
   } else if (drag.kind === "notemove") {
     notes[picked] = moved(drag.start, dx, dy);
     drawNotes();
+  } else if (drag.kind === "opmove" && pickedOp && sel) {
+    const r = drag.start; // stays inside the selection, where it was drawn
+    const x = Math.max(sel.x, Math.min(sel.x + sel.w - r.w, r.x + dx));
+    const y = Math.max(sel.y, Math.min(sel.y + sel.h - r.h, r.y + dy));
+    setOpRect(pickedOp, { ...r, x, y });
+    renderImageSoon();
   }
   updateChrome();
   renderUI();
@@ -1128,6 +1202,11 @@ window.addEventListener("mouseup", () => {
     drawNotes();
   }
   if (d.kind === "notemove" && JSON.stringify(notes[picked]) === JSON.stringify(d.start)) history.pop(); // just a click
+  if (d.kind === "opmove") {
+    const r = pickedRect();
+    if (r && r.x === d.start.x && r.y === d.start.y) history.pop(); // just a click
+    else renderImage(); // the last move, not just the last frame
+  }
   updateChrome();
   renderUI();
 });
@@ -1275,7 +1354,7 @@ window.addEventListener("keydown", (e) => {
     if (e.ctrlKey && k === "s") return finish("saveas"), true;
     if (e.ctrlKey || e.altKey || e.metaKey) return false;
     if (k === "enter") return finish("both"), true;
-    if ((k === "delete" || k === "backspace") && notes[picked]) return deletePicked(), true;
+    if ((k === "delete" || k === "backspace") && (notes[picked] || pickedRect())) return deletePicked(), true;
     if (k === "c") return cycleColor(), true;
     if (k === "f") return pin(), true;
     if (k === "l") return scrollCapture(), true;

@@ -18,6 +18,16 @@
     </header>
     <main id="grid"></main>
     <p id="empty" hidden></p>
+    <div id="viewer" role="dialog" aria-modal="true" aria-label="Screenshot" hidden>
+      <img id="viewer-img" alt="" />
+      <div class="viewer-bar">
+        <button id="viewer-prev" title="Previous (←)" aria-label="Previous">‹</button>
+        <span id="viewer-info"></span>
+        <button id="viewer-next" title="Next (→)" aria-label="Next">›</button>
+        <button id="viewer-copy">Copy</button>
+        <button id="viewer-close" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+    </div>
     <div id="toast" role="status" hidden></div>
   </body>
 </html>

@@ -230,3 +230,9 @@ If a decision changes, update this file in the same commit.
 - Auto-update from GitHub Releases: a quiet check 10 s after start, notification if newer; Settings → General has Check / Update (downloads, installs passively, restarts).
 - Updates are signed (minisign key); unsigned or tampered installers are refused. Why: an updater is a remote code path, signing is the trust anchor.
 - Done in Rust commands, not the JS plugin API, to keep the "everything goes through app commands" rule.
+
+## Owner fixes (2026-11-20)
+- Settings always opens on Shortcuts (the first page), not the last page you visited. Owner's call.
+- History: click a thumbnail to view the full image in the window (← → step, Ctrl+C / Copy, Esc or click outside closes). Copy stays on the Copy button.
+- Redactions (blur, pixelate, black box) can be picked with Select (V): drag to move, Del to delete, Ctrl+Z undoes. Notes stay on top and win a click. Moving re-renders from the original, so the old spot is clean; a redaction stays inside the selection.
+

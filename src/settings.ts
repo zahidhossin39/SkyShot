@@ -230,16 +230,10 @@ function showPage(name: string) {
   if (!document.querySelector(`section[data-page="${name}"]`)) name = "shortcuts";
   document.querySelectorAll<HTMLElement>("section.page").forEach((s) => (s.hidden = s.dataset.page !== name));
   navButtons.forEach((b) => (b.dataset.page === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
-  try {
-    localStorage.setItem("settings-page", name); // reopen where you left off
-  } catch {}
 }
 navButtons.forEach((b) => b.addEventListener("click", () => showPage(b.dataset.page!)));
-let lastPage = "shortcuts";
-try {
-  lastPage = localStorage.getItem("settings-page") ?? lastPage;
-} catch {}
-showPage(lastPage);
+// Always opens on the first page, like a fresh start (owner's call: no "where you left off").
+showPage("shortcuts");
 
 refresh();
 
