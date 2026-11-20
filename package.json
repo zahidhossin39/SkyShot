@@ -9,7 +9,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.ts\"",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "check:fast": "tsc --noEmit && npm test",
+    "check:rust": "cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test --lib",
+    "check": "npm run check:fast && npm run check:rust",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

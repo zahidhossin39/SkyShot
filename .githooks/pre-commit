@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fast checks before every commit: typecheck + JS tests (~15 s). Rust checks run in CI
+# and in `npm run check` (clippy + cargo test take minutes on a cold build).
+# Installed by `npm install` (the "prepare" script sets core.hooksPath).
+npm run --silent check:fast || {
+  echo "pre-commit: typecheck or JS tests failed (run: npm run check:fast)" >&2
+  exit 1
+}

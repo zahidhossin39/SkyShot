@@ -15,9 +15,12 @@ pub const SETTLE_MS: u64 = 700;
 /// Grab again this often while waiting for the area to settle.
 const POLL_MS: u64 = 40;
 
+/// One vertical strip of a frame: per row, its signature and whether it is blank.
+type Strip = Vec<(u64, bool)>;
+
 /// Share of row-strips alike between two frames at the same place (a blinking caret or a small
 /// spinner doesn't count as "still changing").
-fn alike(a: &[Vec<(u64, bool)>], b: &[Vec<(u64, bool)>]) -> bool {
+fn alike(a: &[Strip], b: &[Strip]) -> bool {
     let pairs = a.iter().zip(b).flat_map(|(p, n)| p.iter().zip(n));
     let (same, all) = pairs.fold((0u32, 0u32), |(s, t), (p, n)| (s + (p.0.abs_diff(n.0) <= SIG_TOLERANCE) as u32, t + 1));
     same as f32 >= 0.995 * all.max(1) as f32
@@ -29,9 +32,9 @@ fn alike(a: &[Vec<(u64, bool)>], b: &[Vec<(u64, bool)>]) -> bool {
 /// keeps a scroll that hasn't started yet from passing as the end of the page.
 fn settled(
     grab: &mut impl FnMut() -> Result<RgbaImage, String>,
-    before: &[Vec<(u64, bool)>],
+    before: &[Strip],
     max_ms: u64,
-) -> Result<(RgbaImage, Vec<Vec<(u64, bool)>>), String> {
+) -> Result<(RgbaImage, Vec<Strip>), String> {
     let start = std::time::Instant::now();
     let mut frame = grab()?;
     let mut sig = rows(&frame);
@@ -52,7 +55,7 @@ fn settled(
 /// browsers re-render text a touch differently after a scroll (~5% of pixels off by 1).
 fn row_sig(row: &[u8]) -> u64 {
     let px = (row.len() / 4).max(1) as u64;
-    let sum: u64 = row.chunks_exact(4).map(|p| p[0] as u64 + p[1] as u64 + p[2] as u64).sum();
+    let sum: u64 = row.as_chunks::<4>().0.iter().map(|p| p[0] as u64 + p[1] as u64 + p[2] as u64).sum();
     sum * 16 / px
 }
 
@@ -61,7 +64,7 @@ const SIG_TOLERANCE: u64 = 2 * 16;
 
 /// A row that's one colour carries no position info (blank space matches any shift).
 fn is_blank(row: &[u8]) -> bool {
-    row.chunks_exact(4).all(|px| px == &row[..4])
+    row.as_chunks::<4>().0.iter().all(|px| px == &row[..4])
 }
 
 /// Vertical strips matched separately, so a moving part of the page (an animated card, a video,
@@ -69,7 +72,7 @@ fn is_blank(row: &[u8]) -> bool {
 const STRIPS: usize = 8;
 
 /// Per strip: (hash, blank) per row.
-fn rows(img: &RgbaImage) -> Vec<Vec<(u64, bool)>> {
+fn rows(img: &RgbaImage) -> Vec<Strip> {
     let w = img.width() as usize;
     let strip = w.div_ceil(STRIPS).max(1);
     let rows: Vec<&[u8]> = img.as_raw().chunks_exact(w * 4).collect();
@@ -86,7 +89,7 @@ fn rows(img: &RgbaImage) -> Vec<Vec<(u64, bool)>> {
 /// Each strip lists every shift it's consistent with; the shift the most strips accept wins.
 /// (One vote per strip failed on repeating lines: every text strip fit any multiple of the line
 /// height, and only the line-number strip knew the real one, so it was outvoted.)
-fn find_shift(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>]) -> Option<usize> {
+fn find_shift(prev: &[Strip], next: &[Strip]) -> Option<usize> {
     if frame_fit(prev, next, 0) >= 0.99 {
         return Some(0); // nothing changed, even where there's nothing to match on
     }
@@ -119,7 +122,7 @@ fn find_shift(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>]) -> Option<us
 /// When the strips can't agree (an overlap that's mostly blank, content fading in, a section that
 /// expands as you scroll), take the shift near the expected step that fits the whole frame best,
 /// blank rows included: a black/white section edge then pins it down exactly.
-fn expected_shift(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>], guess: usize) -> (usize, f32) {
+fn expected_shift(prev: &[Strip], next: &[Strip], guess: usize) -> (usize, f32) {
     let h = prev[0].len().min(next[0].len());
     let hi = (guess * 5 / 4).min(h.saturating_sub(2 * (h / 10) + 17));
     let mut best = (guess.min(hi), -1.0f32);
@@ -134,7 +137,7 @@ fn expected_shift(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>], guess: u
 }
 
 /// Share of rows (all strips, blank rows too, top/bottom 10% ignored) that line up at shift `s`.
-fn frame_fit(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>], s: usize) -> f32 {
+fn frame_fit(prev: &[Strip], next: &[Strip], s: usize) -> f32 {
     let h = prev[0].len().min(next[0].len());
     let m = h / 10;
     let pairs = prev.iter().zip(next).flat_map(|(p, n)| (m..h - s - m).map(move |i| (p[i + s].0, n[i].0)));
@@ -198,11 +201,11 @@ fn strip_fits(prev: &[(u64, bool)], next: &[(u64, bool)]) -> Vec<Option<(f32, f3
 /// composer showed up 3 times), so `run` stitches from just above them and adds them once at the
 /// end. Per strip, so an animated bit (a spinner in the message box) only breaks its own strip.
 /// Over-counting is harmless: the page rows held back are stitched from the next frame instead.
-fn fixed_bottom(prev: &[Vec<(u64, bool)>], next: &[Vec<(u64, bool)>]) -> usize {
+fn fixed_bottom(prev: &[Strip], next: &[Strip]) -> usize {
     let h = prev[0].len().min(next[0].len());
     // The whole matching run counts (a message box has blank padding above it), but only if it
     // has a non-blank row: a strip of plain margin matches at any shift and proves nothing.
-    let strip_run = |(p, n): (&Vec<(u64, bool)>, &Vec<(u64, bool)>)| {
+    let strip_run = |(p, n): (&Strip, &Strip)| {
         let run = (0..h).rev().take_while(|&i| p[i].0.abs_diff(n[i].0) <= SIG_TOLERANCE).count();
         let anchored = n[h - run..].iter().any(|r| !r.1);
         if anchored { run } else { 0 }
@@ -603,7 +606,7 @@ mod tests {
     fn blank_margins_are_not_a_fixed_footer() {
         let framed = |offset: u32| {
             let page = page_frame(offset, 100, 0);
-            RgbaImage::from_fn(20, 100, |x, y| if x < 5 || x >= 15 { image::Rgba([255; 4]) } else { *page.get_pixel(x, y) })
+            RgbaImage::from_fn(20, 100, |x, y| if !(5..15).contains(&x) { image::Rgba([255; 4]) } else { *page.get_pixel(x, y) })
         };
         assert_eq!(fixed_bottom(&rows(&framed(0)), &rows(&framed(30))), 0);
     }

@@ -36,8 +36,8 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
         rx
     });
     let lines = read_words(rgba, width, height)?;
-    if median_height(&lines) < SMALL_TEXT_PX {
-        if let Some(Ok(big)) = rx.map(|rx| rx.recv()) {
+    if median_height(&lines) < SMALL_TEXT_PX
+        && let Some(Ok(big)) = rx.map(|rx| rx.recv()) {
             println!("[ocr] {width}x{height} (2x): {} ms", t.elapsed().as_millis());
             let mut big = big?;
             for w in big.iter_mut().flatten() {
@@ -45,7 +45,6 @@ pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
             }
             return Ok(Ocr::new(big));
         }
-    }
     println!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
     Ok(Ocr::new(lines))
 }
@@ -72,7 +71,7 @@ fn read_words(rgba: &[u8], w: u32, h: u32) -> Result<Vec<Vec<Word>>, String> {
     let engine = OcrEngine::TryCreateFromUserProfileLanguages()
         .map_err(|_| "No OCR language installed. Add one in Windows Settings > Language.".to_string())?;
     let mut bgra = rgba.to_vec();
-    for px in bgra.chunks_exact_mut(4) {
+    for px in bgra.as_chunks_mut::<4>().0 {
         px.swap(0, 2); // RGBA -> BGRA
     }
     let writer = DataWriter::new().map_err(err)?;
@@ -114,7 +113,7 @@ fn double(rgba: &[u8], width: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity(rgba.len() * 4);
     for row in rgba.chunks_exact(width as usize * 4) {
         let start = out.len();
-        for px in row.chunks_exact(4) {
+        for px in row.as_chunks::<4>().0 {
             out.extend_from_slice(px);
             out.extend_from_slice(px);
         }

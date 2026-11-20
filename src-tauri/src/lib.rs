@@ -279,11 +279,10 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
         })();
         // Put the cursor back, unless the user already took it.
         let mon_origin = xcap::Monitor::all().ok().and_then(|m| m.into_iter().nth(idx)).and_then(|m| Some((m.x().ok()?, m.y().ok()?)));
-        if let (Some(p), Some((mx, my))) = (back, mon_origin) {
-            if !scroll::user_interrupted(mx + (x + w / 2) as i32, my + (y + h / 2) as i32) {
+        if let (Some(p), Some((mx, my))) = (back, mon_origin)
+            && !scroll::user_interrupted(mx + (x + w / 2) as i32, my + (y + h / 2) as i32) {
                 scroll::move_cursor(p.x as i32, p.y as i32);
             }
-        }
         scroll::ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
         println!("[scroll] {x},{y} {w}x{h} -> {:?}", result.as_ref().map(|i| i.dimensions()));
         match result {

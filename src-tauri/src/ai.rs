@@ -48,7 +48,7 @@ fn parse_claude(status: u16, body: &str) -> Result<String, String> {
         return Err(match status {
             401 | 403 => "Claude rejected the API key. Check it in Settings.".into(),
             429 => "Claude rate limit hit. Try again in a moment.".into(),
-            529 | 500..=599 => "Claude is overloaded right now. Try again in a moment.".into(),
+            500..=599 => "Claude is overloaded right now. Try again in a moment.".into(),
             _ => format!("Claude error ({status}): {msg}"),
         });
     }
@@ -206,11 +206,10 @@ pub fn key(provider: &str) -> Option<String> {
 #[cfg(windows)]
 pub fn remove_key(provider: &str) {
     use windows::{core::HSTRING, Security::Credentials::PasswordVault};
-    if let Ok(vault) = PasswordVault::new() {
-        if let Ok(cred) = vault.Retrieve(&HSTRING::from(VAULT), &HSTRING::from(provider)) {
+    if let Ok(vault) = PasswordVault::new()
+        && let Ok(cred) = vault.Retrieve(&HSTRING::from(VAULT), &HSTRING::from(provider)) {
             let _ = vault.Remove(&cred);
         }
-    }
 }
 
 /// "…ab12": enough to recognise which key is saved without showing it.
