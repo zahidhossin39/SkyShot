@@ -82,4 +82,4 @@ Run "gh release create v$Version `"$exe`" `"$sig`" `"$latestPath`" --repo $Repo 
 Start-Sleep 3
 $served = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/latest.json"
 if ($served.version -ne $Version) { throw "latest.json is serving $($served.version), not $Version" }
-Write-Host "released v$Version: https://github.com/$Repo/releases/tag/v$Version"
+Write-Host "released v${Version}: https://github.com/$Repo/releases/tag/v$Version"
