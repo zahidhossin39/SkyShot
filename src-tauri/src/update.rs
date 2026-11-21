@@ -48,5 +48,5 @@ pub fn check_on_start(app: &AppHandle) {
 
 async fn tokio_sleep() {
     // Off the startup path: hotkeys and the overlay warm-up come first.
-    let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(std::time::Duration::from_secs(10))).await;
+    let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(std::time::Duration::from_secs(3))).await;
 }

@@ -236,7 +236,7 @@ Never hand-tested in the real app (the owner's list; tick off here, nowhere else
 Naming: the visible name is **Shutter** (2026-11-12). The bundle id, exe name and AI-key vault name stay `screenshot-app`, so settings, History and a saved key survive.
 
 ## Updates (v0.2.0)
-- Auto-update from GitHub Releases: a quiet check 10 s after start, notification if newer; Settings → General has Check / Update (downloads, installs passively, restarts).
+- Auto-update from GitHub Releases: a quiet check 3 s after start, notification if newer; Settings → General has Check / Update (downloads, installs passively, restarts).
 - Updates are signed (minisign key); unsigned or tampered installers are refused. Why: an updater is a remote code path, signing is the trust anchor.
 - Done in Rust commands, not the JS plugin API, to keep the "everything goes through app commands" rule.
 
