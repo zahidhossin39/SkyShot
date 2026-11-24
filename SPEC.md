@@ -98,7 +98,7 @@ If a decision changes, update this file in the same commit.
 |---|---|---|
 | Annotations | Pen (freehand, snaps to shapes), arrows, boxes, text, highlighter, numbered step badges (1, 2, 3). Editable after placing. | v2 |
 | Searchable history | Every capture saved with OCR text indexed; search "invoice" to find it. | v3 |
-| Pin to screen | Float a screenshot always-on-top as a reference. | v3 |
+| Pinning + shelf | Replaced "Pin to screen" (floating windows) in 0.3. See "Pinning and the shelf". | v3 |
 | Smart snap + magnifier | While dragging: snap to windows/UI elements, zoom loupe, pixel color with copyable hex. | v3 |
 | AI re-read | See §5. | v3 |
 | Scrolling capture | Auto-scroll and stitch long pages/chats. Hard. | v3 |
@@ -121,11 +121,16 @@ If a decision changes, update this file in the same commit.
   - Strokes are ordinary marks: pick with Select, move, recolour, resize, delete, undo.
 - Skipped on purpose (no clutter): a separate eraser (Select + `Del` and `Ctrl+Z` cover it), a freehand highlighter (the box highlighter fits screenshots of text better), a colour picker beyond the 5 presets, low-latency `desynchronized` canvas (the screenshot canvas has toolbars over it, which defeats it).
 
-### Pin to screen (built on experiment/v2)
-- Toolbar pin button or `F`: the overlay closes and the selection floats in an always-on-top window, placed exactly where it was captured (annotations and redactions included).
-- Drag to move. Scroll to zoom (10% steps, 20–500%), and `0` resets to 100%. `Ctrl+C` copies it. `Esc`, double-click or the hover × closes it. Any number of pins can be open.
-- Rust keeps each pin's pixels (`pin.rs`, dropped when its window closes) and gives the page a PNG. Pin windows get their own capability (`capabilities/pin.json`: drag, resize, show, focus, close) instead of widening the overlay's.
-- Tested on the real window via Win32: position, 400×300 client size, zoom, reset, drag, Esc, double-click, Ctrl+C.
+### Pinning and the shelf (replaces "Pin to screen", owner decision 2026-11-24)
+The old Pin action (floating always-on-top window per shot: `pin.rs`, `pin.html`, `pin_*` commands, `AppState.pins`) is gone.
+- **Pinning toggle**, on/off, default off, saved in settings (`pinning`). It is a pressed/unpressed toolbar button where Pin was (key `F`, tooltip like the others) and a check item in the tray menu ("Pin shots to shelf"). Both stay in sync: Rust owns the value and emits `pinning:changed` to every overlay.
+- **When on, every finished shot goes on the shelf as well**: Copy, Save, Save as (not cancelled), and a scrolling capture. Hook is `remember()` in `lib.rs`, next to the History save. When off nothing is added; shots already on the shelf stay.
+- **Shelf** (`shelf.rs`, `shelf.html`, `src/shelf.ts`): one small frameless, transparent, always-on-top, skip-taskbar, non-focusable window (so it never takes focus from the app being typed in). Thumbnails ~144 px wide, aspect kept (tall shots capped at 200 px high), newest on top, vertically centred on the edge of the monitor's work area, scrolls when long. Hidden when empty. Created on the first shot (from an async task).
+- **Side:** default left. Drag the grip bar at the top; 250 ms after the last move it snaps to whichever edge its centre is nearer, and that side is saved (`shelfSide`). Pure helpers `snap_side` / `dock_pos` are unit-tested.
+- **Drag out:** pressing a thumbnail and moving 5 px starts a native OS drag of its real PNG (`tauri-plugin-drag` 2.1.1 + `@crabnebula/tauri-plugin-drag`, copy mode, thumbnail as the drag icon). Works in anything that accepts a dropped image file. **Dropped removes it** from the shelf; cancelled keeps it. Hover × removes one; "Clear" in the grip bar removes all.
+- **Files:** pixels are PNGs in `<app cache dir>/pins/<id>.png` plus `<id>.thumb.png` (2x the shown size), served to the page by the `shelf://` protocol (ids validated, like `shot://`). The folder is wiped on start. A dropped shot's files are deleted 3 minutes later, not at once, because the target app may still be reading the file. Memory stays flat: Rust keeps only ids and sizes.
+- The shelf window has its own capability (`capabilities/shelf.json`: `drag:default`, start-dragging).
+- Not done: macOS needs `macos-private-api` for the transparent window (port work); shelf only docks left/right, not top/bottom.
 
 ### Zoom loupe, colour picker, window snap (built on experiment/v2)
 - Loupe: OFF by default (owner found the always-on magnifier annoying); press `Z` to toggle it per capture. When on, while choosing an area (before selecting, while dragging a new one, or while resizing an edge), a 120 px magnifier follows the cursor. It shows 15×15 pixels at 8×, the centre pixel outlined, its hex and its x,y. It flips sides near screen edges.
@@ -157,7 +162,7 @@ If a decision changes, update this file in the same commit.
   - Why: a password you hid should never be findable by search or sit on disk.
 
 ### Searchable history (built on experiment/v2)
-- **What's saved:** every finished capture (Copy, Save, Copy & save, Save as when not cancelled, Pin), in the background after the overlay closes. It is saved exactly as exported, so redactions and annotations are burned in and OCR runs on that image. Instant text grab is not saved, since it has no image.
+- **What's saved:** every finished capture (Copy, Save, Copy & save, Save as when not cancelled), in the background after the overlay closes. It is saved exactly as exported, so redactions and annotations are burned in and OCR runs on that image. Instant text grab is not saved, since it has no image.
 - **Storage:** app data dir `history/`, holding `<id>.png`, `<id>.thumb.png` (fits 480×320) and `index.json` (id, time, size, OCR text, starred). One JSON index, no database. The index is written to a temp file and renamed, so a crash can't wipe it. A 600×400 shot took ~60 ms to save, OCR included.
 - **History window** (tray → History…, or Settings → Open history): search box (every word must appear, any order and case, matched words shown in a snippet), a Starred filter, and a newest-first grid. Click a thumbnail or Copy to copy it. Show in folder. Star to keep forever. Delete takes two clicks ("Sure?"). `Ctrl+F` or `/` focuses search.
 - **Retention:** Settings → History, 1 / 7 / 30 / 90 / 365 days or Forever (default 30). It applies on change (asks first when shortening), after each save, and at startup.
@@ -178,7 +183,7 @@ If a decision changes, update this file in the same commit.
 - Live Text, Smart actions, Smart Redact, annotation tools.
 
 ### v3: power features
-- Searchable history, pin to screen, smart snap + magnifier/color picker, AI re-read (BYO key), scrolling capture.
+- Searchable history, pinning shelf, smart snap + magnifier/color picker, AI re-read (BYO key), scrolling capture.
 
 ### Later / maybe
 - Mac, Linux, then mobile (editor-only).
@@ -232,6 +237,7 @@ Never hand-tested in the real app (the owner's list; tick off here, nowhere else
 - Save as, Ctrl+Shift+PrtSc text grab, hotkey rebinding, autostart
 - Multi-monitor, 125% / 150% display scaling
 - AI re-read with a real key
+- Pinning shelf: toggle (button, `F`, tray tick), shelf appears left without stealing focus, drag it to the right edge and it stays there after restart, drag a thumbnail into Chrome, Discord/Slack, Explorer and an editor (removed after the drop, kept on Esc), × and Clear
 
 Naming: the visible name is **Shutter** (2026-11-12). The bundle id, exe name and AI-key vault name stay `screenshot-app`, so settings, History and a saved key survive.
 

@@ -32,6 +32,7 @@ arboard = "3.7.0"
 chrono = "0.4.45"
 image = { version = "0.25", default-features = false, features = ["png"] }
 tauri-plugin-updater = "2"
+tauri-plugin-drag = "2.1.1"
 
 # Windows built-in OCR (Windows.Media.Ocr). Same version Tauri already pulls in.
 [target.'cfg(windows)'.dependencies]

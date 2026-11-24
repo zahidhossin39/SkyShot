@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shutter shelf</title>
+    <script>
+      // Apply the saved theme before first paint. Same key as settings.ts / history.ts.
+      try {
+        var t = localStorage.getItem("shutter-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="/src/shelf.css" />
+    <script type="module" src="/src/shelf.ts" defer></script>
+  </head>
+  <body>
+    <div id="shelf">
+      <div id="grip" data-tauri-drag-region title="Drag to move; it snaps to the nearer screen edge">
+        <span id="grip-dots" data-tauri-drag-region></span>
+        <button id="clear" title="Clear the shelf" aria-label="Clear the shelf">Clear</button>
+      </div>
+      <div id="items"></div>
+    </div>
+  </body>
+</html>

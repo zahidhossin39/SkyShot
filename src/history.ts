@@ -150,7 +150,7 @@ function render() {
   empty.hidden = shown.length > 0;
   empty.textContent = entries.length
     ? "Nothing matches. Search looks at the text in each screenshot (hidden or redacted text isn't included)."
-    : "No screenshots yet. Everything you copy, save or pin shows up here, searchable by its text.";
+    : "No screenshots yet. Everything you copy or save shows up here, searchable by its text.";
 }
 
 async function load() {

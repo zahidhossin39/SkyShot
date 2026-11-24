@@ -16,6 +16,7 @@
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
+    "@crabnebula/tauri-plugin-drag": "^2.1.0",
     "@tauri-apps/api": "^2",
     "perfect-freehand": "^1.2.3"
   },
