@@ -4,7 +4,7 @@
 // redaction stay sharp and exact at any Windows display scaling. Mouse positions are
 // converted from CSS pixels with `scale()`.
 
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { COLORS, drawNote, FONT_PX, isTiny, moved, noteAt, noteBox, type Note, type NoteKind, type Point, type Rect } from "./annotate";
 import { findActions, findSensitive, type Action, type Word } from "./detect";
@@ -525,11 +525,17 @@ function placePanel() {
 
 // ---------------------------------------------------------------- open / close
 
-const webview = (window as unknown as { chrome: { webview: EventTarget & { releaseBuffer(b: ArrayBuffer): void } } })
-  .chrome.webview;
+const webview = (window as unknown as { chrome?: { webview?: EventTarget & { releaseBuffer(b: ArrayBuffer): void } } })
+  .chrome?.webview;
 
-/** Rust posts the frame as WebView2 shared memory (zero-copy). Copy it out and release it. */
+/** Windows: Rust posts the frame as WebView2 shared memory (zero-copy); copy it out and
+ * release it. macOS/Linux: fetch the raw RGBA from the `frame` protocol (lib.rs). */
 async function receiveFrame(): Promise<ArrayBuffer> {
+  if (!webview) {
+    const r = await fetch(convertFileSrc(`${Date.now()}`, "frame"), { cache: "no-store" });
+    if (!r.ok) throw new Error(`no frame (${r.status})`);
+    return r.arrayBuffer();
+  }
   const got = new Promise<ArrayBuffer>((resolve) =>
     webview.addEventListener(
       "sharedbufferreceived",

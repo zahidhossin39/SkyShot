@@ -1,4 +1,5 @@
-//! Offline OCR using the engine built into Windows 10/11 (Windows.Media.Ocr).
+//! Offline OCR. Windows: the engine built into Windows 10/11 (Windows.Media.Ocr).
+//! macOS: Apple's Vision framework. Linux: `ocrs` (pure Rust) with bundled models.
 
 /// OCR result: the text in reading order, plus each engine line's word boxes
 /// (in the input image's pixels) for Smart Redact.
@@ -107,6 +108,7 @@ fn read_words(rgba: &[u8], w: u32, h: u32) -> Result<Vec<Vec<Word>>, String> {
     Ok(lines)
 }
 
+#[cfg(windows)]
 /// 2x upscale by pixel doubling. Reads as well as a smooth resize on the samples and is
 /// ~30x faster than `image::imageops::resize`.
 fn double(rgba: &[u8], width: u32) -> Vec<u8> {
@@ -122,10 +124,12 @@ fn double(rgba: &[u8], width: u32) -> Vec<u8> {
     out
 }
 
+#[cfg(windows)]
 /// Word-box height (px) below which text counts as "small". Picked from the samples:
 /// code at 14px gained a lot from 2x, normal UI text at 17px got slightly worse.
 const SMALL_TEXT_PX: f32 = 16.0;
 
+#[cfg(windows)]
 fn median_height(lines: &[Vec<Word>]) -> f32 {
     let mut hs: Vec<f32> = lines.iter().flatten().map(|w| w.h).collect();
     if hs.is_empty() {
@@ -135,11 +139,140 @@ fn median_height(lines: &[Vec<Word>]) -> f32 {
     hs[hs.len() / 2]
 }
 
-#[cfg(not(windows))]
-pub fn recognize(_rgba: &[u8], _width: u32, _height: u32) -> Result<Ocr, String> {
-    Err("OCR is only implemented on Windows so far.".into())
+/// macOS: Vision reads small text well on its own, so one pass (no 2x trick).
+#[cfg(target_os = "macos")]
+pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
+    let t = std::time::Instant::now();
+    let lines = vision::read_words(rgba, width, height)?;
+    crate::log!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
+    Ok(Ocr::new(lines))
 }
 
+#[cfg(target_os = "macos")]
+mod vision {
+    use super::Word;
+    use objc2::{rc::Retained, AnyThread};
+    use objc2_foundation::{NSArray, NSData, NSDictionary, NSRange, NSString};
+    use objc2_vision::{
+        VNImageRequestHandler, VNRecognizeTextRequest, VNRequest, VNRequestTextRecognitionLevel,
+    };
+
+    pub fn read_words(rgba: &[u8], w: u32, h: u32) -> Result<Vec<Vec<Word>>, String> {
+        use image::ImageEncoder;
+        // Vision takes encoded images; a PNG of a selection takes a few ms.
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new_with_quality(
+            &mut png,
+            image::codecs::png::CompressionType::Fast,
+            image::codecs::png::FilterType::NoFilter,
+        )
+        .write_image(rgba, w, h, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
+
+        let (fw, fh) = (w as f64, h as f64);
+        let mut lines = Vec::new();
+        unsafe {
+            let data = NSData::with_bytes(&png);
+            let handler =
+                VNImageRequestHandler::initWithData_options(VNImageRequestHandler::alloc(), &data, &NSDictionary::new());
+            let request = VNRecognizeTextRequest::new();
+            request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
+            request.setUsesLanguageCorrection(true);
+            let as_request: Retained<VNRequest> = Retained::into_super(Retained::into_super(request.clone()));
+            handler
+                .performRequests_error(&NSArray::from_retained_slice(&[as_request]))
+                .map_err(|e| e.localizedDescription().to_string())?;
+            let Some(results) = request.results() else { return Ok(lines) };
+            for obs in results.iter() {
+                let Some(best) = obs.topCandidates(1).firstObject() else { continue };
+                let text: Retained<NSString> = best.string();
+                let line = text.to_string();
+                // Vision boxes whole lines; ask it for each word's box by its UTF-16 range.
+                let mut words = Vec::new();
+                let mut at = 0usize; // UTF-16 offset of `part`
+                for part in line.split(' ') {
+                    let len = part.encode_utf16().count();
+                    if len > 0
+                        && let Ok(r) = best.boundingBoxForRange_error(NSRange::new(at, len))
+                    {
+                        // Normalized, origin bottom-left -> image pixels, origin top-left.
+                        let b = r.boundingBox();
+                        words.push(Word {
+                            x: (b.origin.x * fw) as f32,
+                            y: ((1.0 - b.origin.y - b.size.height) * fh) as f32,
+                            w: (b.size.width * fw) as f32,
+                            h: (b.size.height * fh) as f32,
+                            text: part.to_string(),
+                        });
+                    }
+                    at += len + 1;
+                }
+                if !words.is_empty() {
+                    lines.push(words);
+                }
+            }
+        }
+        Ok(lines)
+    }
+}
+
+/// Linux: where the bundled models live (set once at startup from the resource dir).
+#[cfg(target_os = "linux")]
+static MODEL_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+#[cfg(target_os = "linux")]
+pub fn set_model_dir(dir: std::path::PathBuf) {
+    let _ = MODEL_DIR.set(dir);
+}
+
+#[cfg(target_os = "linux")]
+pub fn recognize(rgba: &[u8], width: u32, height: u32) -> Result<Ocr, String> {
+    use ocrs::{ImageSource, TextItem};
+    let t = std::time::Instant::now();
+    let engine = linux_engine()?;
+    let src = ImageSource::from_bytes(rgba, (width, height)).map_err(|e| e.to_string())?;
+    let input = engine.prepare_input(src).map_err(|e| e.to_string())?;
+    let words = engine.detect_words(&input).map_err(|e| e.to_string())?;
+    let rows = engine.find_text_lines(&input, &words);
+    let mut lines = Vec::new();
+    for line in engine.recognize_text(&input, &rows).map_err(|e| e.to_string())?.into_iter().flatten() {
+        let ws: Vec<Word> = line
+            .words()
+            .map(|w| {
+                let r = w.bounding_rect();
+                Word { x: r.left() as f32, y: r.top() as f32, w: r.width() as f32, h: r.height() as f32, text: w.to_string() }
+            })
+            .collect();
+        if !ws.is_empty() {
+            lines.push(ws);
+        }
+    }
+    crate::log!("[ocr] {width}x{height}: {} ms", t.elapsed().as_millis());
+    Ok(Ocr::new(lines))
+}
+
+/// Loaded once (~100 ms), then shared.
+#[cfg(target_os = "linux")]
+fn linux_engine() -> Result<&'static ocrs::OcrEngine, String> {
+    static ENGINE: std::sync::OnceLock<Result<ocrs::OcrEngine, String>> = std::sync::OnceLock::new();
+    ENGINE
+        .get_or_init(|| {
+            let dir = MODEL_DIR.get().ok_or("OCR models not found")?;
+            let load = |name: &str| {
+                rten::Model::load_file(dir.join(name)).map_err(|e| format!("Couldn't load OCR model {name}: {e}"))
+            };
+            ocrs::OcrEngine::new(ocrs::OcrEngineParams {
+                detection_model: Some(load("text-detection.onnx")?),
+                recognition_model: Some(load("text-recognition.onnx")?),
+                ..Default::default()
+            })
+            .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| e.clone())
+}
+
+#[cfg(windows)]
 /// Stay under the engine's size limit, and cap pixels so big selections stay fast.
 fn can_upscale(width: u32, height: u32, max_dim: u32) -> bool {
     width * 2 <= max_dim && height * 2 <= max_dim && (width as u64 * height as u64) <= 2_500_000

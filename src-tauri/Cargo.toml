@@ -57,6 +57,26 @@ windows = { version = "0.62", features = [
 # Same version Tauri uses; needed to post frames to the overlay via shared memory.
 webview2-com = "0.39"
 
+# macOS / Linux: what Windows does with its own APIs (AI re-read HTTPS + key storage).
+[target.'cfg(not(windows))'.dependencies]
+ureq = "3"
+base64 = "0.22"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+# OCR: Apple's Vision framework (built in, offline).
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-vision = "0.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# vendored: no libdbus-dev needed to build; crypto-rust: no OpenSSL.
+keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust", "vendored"] }
+# OCR: pure-Rust engine, no system packages. Its models (~12 MB) ship as bundle resources
+# (scripts/get-ocr-models.sh fetches them into ocr-models/; CI runs it).
+ocrs = { version = "0.14", default-features = false, features = ["onnx"] }
+rten = "0.28"
+
 
 # Optimize dependencies even in dev builds: screen capture and image conversion are
 # ~10x slower unoptimized, which would make hotkey timing in dev meaningless.

@@ -556,6 +556,20 @@ pub fn run() {
                 responder.respond(response.unwrap());
             });
         })
+        // Overlay frame where WebView2 shared memory doesn't exist (macOS, Linux): the page
+        // fetches frame://… and gets the raw RGBA, no JSON. Keyed by the asking webview, so a
+        // window can only ever take its own frame.
+        .register_uri_scheme_protocol("frame", |ctx, _request| {
+            let label = ctx.webview_label().to_string();
+            match capture::take_frame(ctx.app_handle(), &label) {
+                Some(f) => tauri::http::Response::builder()
+                    .header("Content-Type", "application/octet-stream")
+                    .header("Cache-Control", "no-store")
+                    .body(f.rgba),
+                None => tauri::http::Response::builder().status(404).body(Vec::new()),
+            }
+            .unwrap()
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -563,6 +577,10 @@ pub fn run() {
         .setup(|app| {
             if let Ok(dir) = app.path().app_data_dir() {
                 applog::init(dir.join("logs"));
+            }
+            #[cfg(target_os = "linux")]
+            if let Ok(dir) = app.path().resource_dir() {
+                ocr::set_model_dir(dir.join("ocr-models"));
             }
             let handle = app.handle();
             let first_run = !settings::exists(handle);

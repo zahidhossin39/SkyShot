@@ -116,7 +116,6 @@ fn parse_gemini(status: u16, body: &str) -> Result<String, String> {
 // ---------------------------------------------------------------- shared
 
 /// Returns the transcription, or a message fit to show the user.
-#[cfg(windows)]
 pub fn reread(provider: &str, key: &str, rgba: &[u8], width: u32, height: u32) -> Result<String, String> {
     use image::ImageEncoder;
     let mut png = Vec::new();
@@ -218,20 +217,46 @@ pub fn hint(key: &str) -> String {
     format!("…{tail}")
 }
 
+// macOS / Linux: plain crates where Windows uses its own APIs above.
+
 #[cfg(not(windows))]
-pub fn reread(_: &str, _: &str, _: &[u8], _: u32, _: u32) -> Result<String, String> {
-    Err("AI re-read is only implemented on Windows so far.".into())
+fn base64(bytes: &[u8]) -> Result<String, String> {
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+#[cfg(not(windows))]
+fn post(url: &str, headers: &[(&str, &str)], body: &str) -> Result<(u16, String), String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).build().into();
+    let mut req = agent.post(url).header("content-type", "application/json");
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    let mut resp = req.send(body).map_err(|e| format!("Couldn't reach the AI service: {e}"))?;
+    let status = resp.status().as_u16();
+    let text = resp.body_mut().read_to_string().map_err(|e| format!("Couldn't reach the AI service: {e}"))?;
+    Ok((status, text))
+}
+
+/// macOS Keychain / Linux Secret Service (GNOME Keyring, KWallet), one entry per provider.
+#[cfg(not(windows))]
+fn entry(provider: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new("Shutter AI key", provider).map_err(|e| e.to_string())
 }
 #[cfg(not(windows))]
-pub fn save_key(_: &str, _: &str) -> Result<(), String> {
-    Err("Only implemented on Windows so far.".into())
+pub fn save_key(provider: &str, key: &str) -> Result<(), String> {
+    entry(provider)?.set_password(key).map_err(|e| format!("Couldn't save the key in the system keyring: {e}"))
 }
 #[cfg(not(windows))]
-pub fn key(_: &str) -> Option<String> {
-    None
+pub fn key(provider: &str) -> Option<String> {
+    entry(provider).ok()?.get_password().ok()
 }
 #[cfg(not(windows))]
-pub fn remove_key(_: &str) {}
+pub fn remove_key(provider: &str) {
+    if let Ok(e) = entry(provider) {
+        let _ = e.delete_credential();
+    }
+}
 
 #[cfg(test)]
 mod tests {
