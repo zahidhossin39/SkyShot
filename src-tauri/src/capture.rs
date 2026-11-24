@@ -4,14 +4,15 @@
 //! grab pixels and hand them over. That's what keeps hotkey -> visible fast.
 
 use crate::{
+    screens::{self, Screen},
     state::{AppState, Frame, Session},
     Mode,
 };
 use serde::Serialize;
 use std::time::Instant;
 use tauri::{
-    AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, window::Color,
+    AppHandle, Emitter, EventTarget, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    window::Color,
 };
 
 const PREFIX: &str = "overlay-";
@@ -94,7 +95,7 @@ fn no_window_animation(_: &WebviewWindow) {}
 
 /// Create one hidden overlay per monitor at startup so the first capture is fast too.
 pub fn warm_up(app: &AppHandle) {
-    let count = xcap::Monitor::all().map(|m| m.len()).unwrap_or(1);
+    let count = screens::count(app);
     for i in 0..count {
         if let Err(e) = get_or_create(app, &format!("{PREFIX}{i}")) {
             crate::log!("[capture] warm-up failed: {e}");
@@ -128,16 +129,9 @@ pub fn start(app: &AppHandle, mode: Mode) {
 fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
     let state = app.state::<AppState>();
     let t0 = Instant::now();
-    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-    let mut shots = Vec::with_capacity(monitors.len());
-    for m in &monitors {
-        let x = m.x().map_err(|e| e.to_string())?;
-        let y = m.y().map_err(|e| e.to_string())?;
-        let img = m.capture_image().map_err(|e| e.to_string())?;
-        shots.push((Bounds::of(m, x, y, &img), img));
-    }
+    let shots = screens::capture_all(app)?;
     let capture_ms = t0.elapsed().as_millis();
-    let bounds: Vec<Bounds> = shots.iter().map(|(b, _)| *b).collect();
+    let bounds: Vec<Screen> = shots.iter().map(|(b, _)| *b).collect();
 
     for (i, (b, img)) in shots.into_iter().enumerate() {
         let label = format!("{PREFIX}{i}");
@@ -158,13 +152,13 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
     // Hide overlays for monitors that were unplugged since last time.
     for w in overlay_windows(app) {
         let idx: usize = w.label()[PREFIX.len()..].parse().unwrap_or(usize::MAX);
-        if idx >= monitors.len() {
+        if idx >= bounds.len() {
             let _ = w.hide();
         }
     }
     crate::log!(
         "[capture] grabbed {} monitor(s) in {capture_ms} ms, events sent at {} ms",
-        monitors.len(),
+        bounds.len(),
         since_hotkey(app)
     );
     // Window rects for snap-to-window. Sent after the frames, so they never slow the hotkey.
@@ -173,31 +167,8 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
     Ok(())
 }
 
-/// A monitor in the units the OS positions windows and reports window rects in: physical
-/// pixels on Windows and Linux (scale 1), points on macOS (scale = pixels per point).
-#[derive(Clone, Copy)]
-struct Bounds {
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-    scale: f64,
-}
-
-impl Bounds {
-    #[cfg(target_os = "macos")]
-    fn of(m: &xcap::Monitor, x: i32, y: i32, img: &xcap::image::RgbaImage) -> Self {
-        let w = m.width().unwrap_or(img.width());
-        Bounds { x, y, w, h: m.height().unwrap_or(img.height()), scale: img.width() as f64 / w.max(1) as f64 }
-    }
-    #[cfg(not(target_os = "macos"))]
-    fn of(_: &xcap::Monitor, x: i32, y: i32, img: &xcap::image::RgbaImage) -> Self {
-        Bounds { x, y, w: img.width(), h: img.height(), scale: 1.0 }
-    }
-}
-
 /// Cover the monitor exactly. Position first: moving to another monitor can change the scale.
-fn place(win: &WebviewWindow, b: &Bounds) {
+fn place(win: &WebviewWindow, b: &Screen) {
     #[cfg(target_os = "macos")]
     {
         let _ = win.set_position(tauri::LogicalPosition::new(b.x, b.y));
@@ -205,28 +176,21 @@ fn place(win: &WebviewWindow, b: &Bounds) {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = win.set_position(PhysicalPosition::new(b.x, b.y));
-        let _ = win.set_size(PhysicalSize::new(b.w, b.h));
+        let _ = win.set_position(tauri::PhysicalPosition::new(b.x, b.y));
+        let _ = win.set_size(tauri::PhysicalSize::new(b.w, b.h));
+    }
+    // Wayland ignores window positions; fullscreen is the one placement it honours.
+    #[cfg(target_os = "linux")]
+    if screens::wayland() {
+        let _ = win.set_fullscreen(true);
     }
 }
 
 /// Each overlay gets the visible windows on its monitor as `[x, y, w, h]` (monitor-relative
 /// image px, clipped to the monitor), top-most first, so hovering can outline one.
-fn send_windows(app: &AppHandle, monitors: &[Bounds]) {
+fn send_windows(app: &AppHandle, monitors: &[Screen]) {
     let t = Instant::now();
-    let me = std::process::id();
-    // List order is z-order. Skip title/app_name (slow) and our own overlays.
-    let wins: Vec<(i32, i32, i32, i32)> = xcap::Window::all()
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|w| {
-            if w.pid().ok()? == me || w.is_minimized().ok()? {
-                return None;
-            }
-            let (x, y) = (w.x().ok()?, w.y().ok()?);
-            Some((x, y, x + w.width().ok()? as i32, y + w.height().ok()? as i32))
-        })
-        .collect();
+    let wins = screens::windows(); // z-order, top-most first
     for (i, b) in monitors.iter().enumerate() {
         let k = b.scale;
         let rects: Vec<[i32; 4]> = clip_to_monitor(&wins, (b.x, b.y, b.w, b.h))

@@ -27,7 +27,6 @@ tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.0"
 tauri-plugin-single-instance = "2.5.5"
 tauri-plugin-autostart = "2.7.0"
-xcap = "0.9.8"
 arboard = "3.7.0"
 chrono = "0.4.45"
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -59,6 +58,11 @@ windows = { version = "0.62", features = [
 webview2-com = "0.39"
 
 # macOS / Linux: what Windows does with its own APIs (AI re-read HTTPS + key storage).
+# Screen capture on Windows and macOS. Linux has its own (screens.rs): xcap's Linux side needs
+# newer PipeWire headers than the oldest distros we build for.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+xcap = "0.9.8"
+
 [target.'cfg(not(windows))'.dependencies]
 ureq = "3"
 base64 = "0.22"
@@ -80,6 +84,9 @@ keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust", "
 # OCR: pure-Rust engine, no system packages. Its models (~12 MB) ship as bundle resources
 # (scripts/get-ocr-models.sh fetches them into ocr-models/; CI runs it).
 ocrs = { version = "0.14", default-features = false, features = ["onnx"] }
+# Capture: X11 root window, or the xdg screenshot portal on Wayland.
+x11rb = "0.13"
+zbus = "5"
 rten = "0.28"
 
 

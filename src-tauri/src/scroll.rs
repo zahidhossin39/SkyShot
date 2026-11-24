@@ -419,6 +419,7 @@ mod tests {
     }
 
     /// Real run on screen. SCROLL_TEST="x,y,w,h,out.png" (primary monitor px).
+    #[cfg(not(target_os = "linux"))]
     #[test]
     fn real_scroll_capture() {
         let Ok(spec) = std::env::var("SCROLL_TEST") else { return };

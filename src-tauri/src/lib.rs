@@ -5,6 +5,7 @@ mod history;
 mod hotkeys;
 mod ocr;
 mod output;
+mod screens;
 mod scroll;
 mod settings;
 mod shelf;
@@ -251,16 +252,12 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
         let back = app.cursor_position().ok();
         let parked = std::cell::Cell::new(None); // (x, y, points per pixel) where the cursor was put
         let result = (|| -> Result<image::RgbaImage, String> {
-            let mon = xcap::Monitor::all().map_err(|e| e.to_string())?.into_iter().nth(idx).ok_or("monitor gone")?;
-            let (mx, my) = (mon.x().map_err(|e| e.to_string())?, mon.y().map_err(|e| e.to_string())?);
-            let grab = || {
-                mon.capture_image()
-                    .map(|img| image::imageops::crop_imm(&img, x, y, w, h).to_image())
-                    .map_err(|e| e.to_string())
-            };
+            let (mon, capture) = screens::grabber(&app, idx)?;
+            let (mx, my) = (mon.x, mon.y);
+            let grab = || capture().map(|img| image::imageops::crop_imm(&img, x, y, w, h).to_image());
             // Park the cursor over the area once; if the user moves it (or presses Esc), stop.
             // Cursor coordinates are points on macOS, pixels elsewhere.
-            let k = if cfg!(target_os = "macos") { mon.scale_factor().unwrap_or(1.0) as f64 } else { 1.0 };
+            let k = mon.scale;
             let (cx, cy) = (mx + ((x + w / 2) as f64 / k) as i32, my + ((y + h / 2) as f64 / k) as i32);
             parked.set(Some((cx, cy, k)));
             scroll::move_cursor(cx, cy);
