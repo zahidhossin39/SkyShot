@@ -5,9 +5,9 @@ mod history;
 mod hotkeys;
 mod ocr;
 mod output;
-mod pin;
 mod scroll;
 mod settings;
+mod shelf;
 mod state;
 mod tray;
 mod update;
@@ -61,10 +61,13 @@ pub fn open_history(app: &AppHandle) {
         .build();
 }
 
-/// Add a finished capture to history in the background (it runs OCR).
+/// Add a finished capture to history in the background (it runs OCR), and to the shelf if pinning is on.
 fn remember(app: &AppHandle, rgba: Vec<u8>, width: u32, height: u32) {
     let app = app.clone();
     std::thread::spawn(move || {
+        if shelf::pinning(&app) {
+            shelf::add(&app, rgba.clone(), width, height);
+        }
         if let Err(e) = history::add(&app, rgba, width, height) {
             crate::log!("[history] save failed: {e}");
             return;
@@ -236,20 +239,6 @@ async fn finish(app: AppHandle, request: Request<'_>) -> Result<Option<String>, 
     .map_err(|e| e.to_string())?
 }
 
-/// Pin the selection to the screen. Async: creating a window from a sync command can
-/// deadlock on Windows.
-#[tauri::command]
-async fn pin(app: AppHandle, window: WebviewWindow, request: Request<'_>) -> Result<(), String> {
-    let (rgba, width, height) = raw_image(&request)?;
-    let pos = |name: &str| -> i32 {
-        request.headers().get(name).and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(0)
-    };
-    let (x, y) = (pos("x-left"), pos("x-top"));
-    capture::close(&app);
-    remember(&app, rgba.clone(), width, height);
-    pin::open(&app, &window, state::Frame { width, height, rgba }, x, y)
-}
-
 /// Scrolling capture of the selection (`x, y, w, h` in this overlay's monitor pixels).
 /// The overlay closes so the wheel reaches the real window under it.
 #[tauri::command]
@@ -308,14 +297,44 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
     Ok(())
 }
 
+// ---------- pinning + shelf commands ----------
+
 #[tauri::command]
-fn pin_image(app: AppHandle, window: WebviewWindow) -> Result<tauri::ipc::Response, String> {
-    pin::png(&app, window.label()).map(tauri::ipc::Response::new)
+fn get_pinning(app: AppHandle) -> bool {
+    shelf::pinning(&app)
 }
 
 #[tauri::command]
-fn pin_copy(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
-    pin::copy(&app, window.label())
+fn set_pinning(app: AppHandle, enabled: bool) {
+    shelf::set_pinning(&app, enabled);
+}
+
+#[tauri::command]
+fn shelf_list(app: AppHandle) -> Vec<shelf::Item> {
+    shelf::list(&app)
+}
+
+/// `dropped`: the shot was dragged into another app (its file is deleted a little later).
+#[tauri::command]
+fn shelf_remove(app: AppHandle, id: String, dropped: bool) {
+    shelf::remove(&app, &id, dropped);
+}
+
+#[tauri::command]
+fn shelf_clear(app: AppHandle) {
+    shelf::clear(&app);
+}
+
+/// The shelf page reports its content height (logical px) so the window can fit it.
+#[tauri::command]
+fn shelf_fit(app: AppHandle, height: f64) {
+    shelf::fit(&app, height);
+}
+
+/// Absolute path of a shelf PNG, for the OS drag.
+#[tauri::command]
+fn shelf_path(app: AppHandle, name: String) -> Result<String, String> {
+    shelf::file_for(&app, &name).map(|p| p.display().to_string())
 }
 
 // ---------- history commands ----------
@@ -573,6 +592,9 @@ pub fn run() {
             }
             .unwrap()
         })
+        // Shelf thumbnails: shelf://<id>.thumb.png (see shelf.rs).
+        .register_asynchronous_uri_scheme_protocol("shelf", shelf::protocol)
+        .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -597,11 +619,13 @@ pub fn run() {
             app.manage(AppState {
                 settings: Mutex::new(s),
                 frames: Mutex::new(Default::default()),
-            pins: Mutex::new(Default::default()),
+                shelf: Mutex::new(Vec::new()),
+                pin_item: Mutex::new(None),
                 session: Mutex::new(None),
                 hotkeys_paused: Default::default(),
                 tray_items: Mutex::new(None),
             });
+            shelf::cleanup_on_start(handle);
             tray::create(handle)?;
             hotkeys::register_all(handle);
             capture::warm_up(handle);
@@ -630,10 +654,14 @@ pub fn run() {
             open_url,
             grab_text,
             finish,
-            pin,
-            pin_image,
+            get_pinning,
+            set_pinning,
+            shelf_list,
+            shelf_remove,
+            shelf_clear,
+            shelf_fit,
+            shelf_path,
             scroll_capture,
-            pin_copy,
             history_list,
             history_star,
             history_delete,

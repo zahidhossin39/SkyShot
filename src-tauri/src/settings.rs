@@ -15,6 +15,10 @@ pub struct Settings {
     pub history_days: u32,
     /// AI re-read provider: "claude" or "gemini". Its key is in Credential Manager (ai.rs).
     pub ai_provider: String,
+    /// Pinning: also put every finished shot on the shelf (shelf.rs). Off by default.
+    pub pinning: bool,
+    /// Which screen edge the shelf sits on; it follows where the user last dropped it.
+    pub shelf_side: crate::shelf::Side,
 }
 
 impl Default for Settings {
@@ -26,6 +30,8 @@ impl Default for Settings {
             save_dir: String::new(),
             history_days: 30,
             ai_provider: "claude".into(),
+            pinning: false,
+            shelf_side: crate::shelf::Side::Left,
         }
     }
 }

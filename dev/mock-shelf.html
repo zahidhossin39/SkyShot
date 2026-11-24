@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Browser mock of the shelf: fakes Tauri and loads the real shelf.html markup + src/shelf.ts.
+     Open http://localhost:1430/dev/mock-shelf.html. window.__calls logs invoke() commands. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Shelf mock</title>
+    <style>
+      html { background: linear-gradient(135deg, #3b6fb6, #e8a65a); min-height: 100vh; }
+    </style>
+    <script>
+      const png = (w, h, hue) => {
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const g = c.getContext("2d");
+        g.fillStyle = `hsl(${hue} 60% 85%)`;
+        g.fillRect(0, 0, w, h);
+        g.fillStyle = `hsl(${hue} 60% 30%)`;
+        g.font = "20px sans-serif";
+        for (let i = 0; i < h / 30; i++) g.fillText(`Line ${i + 1} of shot ${hue}`, 10, 30 + i * 30);
+        return c.toDataURL("image/png");
+      };
+      const sizes = [[1440, 900], [800, 600], [600, 2400]];
+      let items = sizes.map(([w, h], i) => ({ id: `s${i}`, width: w, height: h }));
+      const urls = Object.fromEntries(items.map((it, i) => [`${it.id}.thumb.png`, png(Math.min(288, it.width), Math.round((Math.min(288, it.width) * it.height) / it.width), i * 90)]));
+      window.__calls = [];
+      window.__fit = [];
+      const cbs = {};
+      window.__TAURI_INTERNALS__ = {
+        transformCallback: (cb) => {
+          const id = Math.floor(Math.random() * 1e9);
+          window[`_${id}`] = cb;
+          return id;
+        },
+        convertFileSrc: (name) => urls[name] || "",
+        metadata: { currentWindow: { label: "shelf" }, currentWebview: { windowLabel: "shelf", label: "shelf" } },
+        invoke: async (cmd, args) => {
+          window.__calls.push([cmd, args]);
+          if (cmd === "shelf_list") return items;
+          if (cmd === "shelf_fit") return void window.__fit.push(args.height);
+          if (cmd === "shelf_remove") items = items.filter((i) => i.id !== args.id);
+          if (cmd === "shelf_clear") items = [];
+          if (cmd === "shelf_path") return "C:/fake/" + args.name;
+          return null;
+        },
+      };
+    </script>
+    <script type="module">
+      const html = await (await fetch("/shelf.html")).text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      document.body.innerHTML = doc.body.innerHTML;
+      document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="/src/shelf.css" />');
+      document.body.style.width = "176px";
+      document.body.style.height = "420px";
+      await import("/src/shelf.ts");
+    </script>
+  </head>
+  <body></body>
+</html>

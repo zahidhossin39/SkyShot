@@ -12,7 +12,7 @@ A fast screenshot tool for Windows, built with Tauri 2 (Rust core, TypeScript UI
 On the `experiment/v2` branch (not yet hand-tested):
 
 - Smart Redact (finds emails, keys, card numbers), Live Text with smart actions, annotations
-- Pin to screen, zoom loupe + colour picker, searchable History, AI re-read, scrolling capture
+- Pinning shelf (drag shots into any app), zoom loupe + colour picker, searchable History, AI re-read, scrolling capture
 
 ## Run from source
 

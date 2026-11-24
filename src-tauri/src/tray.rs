@@ -1,6 +1,6 @@
 use crate::{capture, hotkeys, state::AppState, Mode};
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager,
 };
@@ -8,6 +8,7 @@ use tauri::{
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let capture_i = MenuItem::with_id(app, "capture", "Capture region", true, None::<&str>)?;
     let text_i = MenuItem::with_id(app, "text", "Grab text", true, None::<&str>)?;
+    let pin_i = CheckMenuItem::with_id(app, "pinning", "Pin shots to shelf", true, crate::shelf::pinning(app), None::<&str>)?;
     let history_i = MenuItem::with_id(app, "history", "History…", true, None::<&str>)?;
     let settings_i = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -16,12 +17,14 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         &[
             &capture_i,
             &text_i,
+            &pin_i,
             &PredefinedMenuItem::separator(app)?,
             &history_i,
             &settings_i,
             &quit_i,
         ],
     )?;
+    *app.state::<AppState>().pin_item.lock().unwrap() = Some(pin_i);
     *app.state::<AppState>().tray_items.lock().unwrap() = Some((capture_i, text_i));
     refresh_labels(app);
 
@@ -33,6 +36,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "capture" => capture::start(app, Mode::Capture),
             "text" => capture::start(app, Mode::Text),
+            "pinning" => crate::shelf::set_pinning(app, !crate::shelf::pinning(app)),
             "history" => crate::open_history(app),
             "settings" => crate::open_settings(app),
             "quit" => app.exit(0),

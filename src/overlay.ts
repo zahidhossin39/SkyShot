@@ -669,15 +669,16 @@ async function finish(action: "copy" | "save" | "both" | "saveas") {
   await invoke("finish", bytes, { headers: { ...headers, "x-action": action } }).catch(failed("finish"));
 }
 
-async function pin() {
-  if (!sel || busy) return;
-  commitNoteInput();
-  busy = true;
-  const { bytes, headers } = cropSelection();
-  const at = { "x-left": String(sel.x), "x-top": String(sel.y) };
-  await leaveAndHide();
-  await invoke("pin", bytes, { headers: { ...headers, ...at } }).catch(failed("pin"));
+/** Pinning (also add finished shots to the shelf): Rust keeps the setting, the tray shares it. */
+function showPinning(on: boolean) {
+  toolbar.querySelector('[data-action="pinning"]')?.setAttribute("aria-pressed", String(on));
 }
+const togglePinning = () =>
+  invoke<boolean>("get_pinning")
+    .then((on) => invoke("set_pinning", { enabled: !on }))
+    .catch(failed("pinning"));
+void invoke<boolean>("get_pinning").then(showPinning, () => {});
+void getCurrentWebviewWindow().listen<boolean>("pinning:changed", (e) => showPinning(e.payload));
 
 async function scrollCapture() {
   if (!sel || busy) return;
@@ -1438,7 +1439,7 @@ window.addEventListener("keydown", (e) => {
     if (k === "enter") return finish("save"), true;
     if ((k === "delete" || k === "backspace") && (notes[picked] || pickedRect())) return deletePicked(), true;
     if (k === "c") return cycleColor(), true;
-    if (k === "f") return pin(), true;
+    if (k === "f") return void togglePinning(), true;
     if (k === "l") return scrollCapture(), true;
     const tools: Record<string, Tool> = {
       v: "select", b: "blur", p: "pixelate", r: "box",
@@ -1462,7 +1463,7 @@ toolbar.addEventListener("click", (e) => {
     case "ocr": return void extractText();
     case "smart": return void startSmart();
     case "color": return toggleColors();
-    case "pin": return void pin();
+    case "pinning": return void togglePinning();
     case "scroll": return void scrollCapture();
     case "copy":
     case "save":

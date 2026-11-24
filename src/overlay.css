@@ -203,7 +203,8 @@ button:focus-visible {
 }
 
 /* Active tool: tinted fill plus accent icon, readable at a glance. */
-button.active {
+button.active,
+#toolbar button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: #9cc3ff;
 }
