@@ -357,14 +357,42 @@ pub fn move_cursor(x: i32, y: i32) {
     }
 }
 
+// macOS / Linux X11 via enigo. macOS asks for the Accessibility permission the first time.
+// Wayland doesn't let apps send input, so these do nothing there and the capture just ends.
 #[cfg(not(windows))]
-pub fn wheel(_: i32) {}
-#[cfg(not(windows))]
-pub fn user_interrupted(_: i32, _: i32) -> bool {
-    false
+fn with_enigo(f: impl FnOnce(&mut enigo::Enigo)) {
+    match enigo::Enigo::new(&enigo::Settings::default()) {
+        Ok(mut e) => f(&mut e),
+        Err(e) => crate::log!("[scroll] no input access: {e}"),
+    }
 }
 #[cfg(not(windows))]
-pub fn move_cursor(_: i32, _: i32) {}
+pub fn wheel(notches: i32) {
+    use enigo::Mouse;
+    with_enigo(|e| {
+        let _ = e.scroll(notches, enigo::Axis::Vertical);
+    });
+}
+/// Moved the mouse away from where we parked it. (No Esc check here: reading key state
+/// globally needs more permissions than it's worth.)
+#[cfg(not(windows))]
+pub fn user_interrupted(x: i32, y: i32) -> bool {
+    use enigo::Mouse;
+    let mut moved = false;
+    with_enigo(|e| {
+        if let Ok((px, py)) = e.location() {
+            moved = (px - x).abs() > 4 || (py - y).abs() > 4;
+        }
+    });
+    moved
+}
+#[cfg(not(windows))]
+pub fn move_cursor(x: i32, y: i32) {
+    use enigo::Mouse;
+    with_enigo(|e| {
+        let _ = e.move_mouse(x, y, enigo::Coordinate::Abs);
+    });
+}
 
 #[cfg(test)]
 mod tests {

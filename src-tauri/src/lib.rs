@@ -260,6 +260,7 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(250)); // let the overlay disappear
         let back = app.cursor_position().ok();
+        let parked = std::cell::Cell::new(None); // (x, y, points per pixel) where the cursor was put
         let result = (|| -> Result<image::RgbaImage, String> {
             let mon = xcap::Monitor::all().map_err(|e| e.to_string())?.into_iter().nth(idx).ok_or("monitor gone")?;
             let (mx, my) = (mon.x().map_err(|e| e.to_string())?, mon.y().map_err(|e| e.to_string())?);
@@ -269,7 +270,10 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
                     .map_err(|e| e.to_string())
             };
             // Park the cursor over the area once; if the user moves it (or presses Esc), stop.
-            let (cx, cy) = (mx + (x + w / 2) as i32, my + (y + h / 2) as i32);
+            // Cursor coordinates are points on macOS, pixels elsewhere.
+            let k = if cfg!(target_os = "macos") { mon.scale_factor().unwrap_or(1.0) as f64 } else { 1.0 };
+            let (cx, cy) = (mx + ((x + w / 2) as f64 / k) as i32, my + ((y + h / 2) as f64 / k) as i32);
+            parked.set(Some((cx, cy, k)));
             scroll::move_cursor(cx, cy);
             // No "hands off" toast here: it slid into the area being captured and got stitched in.
             let go_on = |n| {
@@ -283,10 +287,9 @@ fn scroll_capture(app: AppHandle, window: WebviewWindow, x: u32, y: u32, w: u32,
             scroll::run_with(grab, go_on, scroll::SETTLE_MS)
         })();
         // Put the cursor back, unless the user already took it.
-        let mon_origin = xcap::Monitor::all().ok().and_then(|m| m.into_iter().nth(idx)).and_then(|m| Some((m.x().ok()?, m.y().ok()?)));
-        if let (Some(p), Some((mx, my))) = (back, mon_origin)
-            && !scroll::user_interrupted(mx + (x + w / 2) as i32, my + (y + h / 2) as i32) {
-                scroll::move_cursor(p.x as i32, p.y as i32);
+        if let (Some(p), Some((cx, cy, k))) = (back, parked.get())
+            && !scroll::user_interrupted(cx, cy) {
+                scroll::move_cursor((p.x / k) as i32, (p.y / k) as i32);
             }
         scroll::ACTIVE.store(false, std::sync::atomic::Ordering::SeqCst);
         crate::log!("[scroll] {x},{y} {w}x{h} -> {:?}", result.as_ref().map(|i| i.dimensions()));
@@ -578,6 +581,9 @@ pub fn run() {
             if let Ok(dir) = app.path().app_data_dir() {
                 applog::init(dir.join("logs"));
             }
+            // A tray utility: no Dock icon, and its windows may float over full-screen apps.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "linux")]
             if let Ok(dir) = app.path().resource_dir() {
                 ocr::set_model_dir(dir.join("ocr-models"));

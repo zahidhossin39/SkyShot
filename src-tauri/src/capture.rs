@@ -74,7 +74,22 @@ fn no_window_animation(win: &WebviewWindow) {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS: above the menu bar and Dock (screen-saver level), on every Space and over
+/// full-screen apps, with no zoom animation. AppKit wants this on the main thread.
+#[cfg(target_os = "macos")]
+fn no_window_animation(win: &WebviewWindow) {
+    let w = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use objc2_app_kit::{NSWindow, NSWindowAnimationBehavior, NSWindowCollectionBehavior as B};
+        let Ok(ptr) = w.ns_window() else { return };
+        let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+        ns.setLevel(1000); // NSScreenSaverWindowLevel
+        ns.setCollectionBehavior(B::CanJoinAllSpaces | B::FullScreenAuxiliary | B::Stationary);
+        ns.setAnimationBehavior(NSWindowAnimationBehavior::None);
+    });
+}
+
+#[cfg(target_os = "linux")]
 fn no_window_animation(_: &WebviewWindow) {}
 
 /// Create one hidden overlay per monitor at startup so the first capture is fast too.
@@ -119,18 +134,16 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
         let x = m.x().map_err(|e| e.to_string())?;
         let y = m.y().map_err(|e| e.to_string())?;
         let img = m.capture_image().map_err(|e| e.to_string())?;
-        shots.push((x, y, img));
+        shots.push((Bounds::of(m, x, y, &img), img));
     }
     let capture_ms = t0.elapsed().as_millis();
-    let bounds: Vec<_> = shots.iter().map(|(x, y, img)| (*x, *y, img.width(), img.height())).collect();
+    let bounds: Vec<Bounds> = shots.iter().map(|(b, _)| *b).collect();
 
-    for (i, (x, y, img)) in shots.into_iter().enumerate() {
+    for (i, (b, img)) in shots.into_iter().enumerate() {
         let label = format!("{PREFIX}{i}");
         let win = get_or_create(app, &label)?;
         let (width, height) = img.dimensions();
-        // Position first: moving to another monitor can change the scale factor.
-        let _ = win.set_position(PhysicalPosition::new(x, y));
-        let _ = win.set_size(PhysicalSize::new(width, height));
+        place(&win, &b);
         state.frames.lock().unwrap().insert(
             label.clone(),
             Frame { width, height, rgba: img.into_raw() },
@@ -160,9 +173,46 @@ fn open(app: &AppHandle, mode: Mode) -> Result<(), String> {
     Ok(())
 }
 
+/// A monitor in the units the OS positions windows and reports window rects in: physical
+/// pixels on Windows and Linux (scale 1), points on macOS (scale = pixels per point).
+#[derive(Clone, Copy)]
+struct Bounds {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    scale: f64,
+}
+
+impl Bounds {
+    #[cfg(target_os = "macos")]
+    fn of(m: &xcap::Monitor, x: i32, y: i32, img: &xcap::image::RgbaImage) -> Self {
+        let w = m.width().unwrap_or(img.width());
+        Bounds { x, y, w, h: m.height().unwrap_or(img.height()), scale: img.width() as f64 / w.max(1) as f64 }
+    }
+    #[cfg(not(target_os = "macos"))]
+    fn of(_: &xcap::Monitor, x: i32, y: i32, img: &xcap::image::RgbaImage) -> Self {
+        Bounds { x, y, w: img.width(), h: img.height(), scale: 1.0 }
+    }
+}
+
+/// Cover the monitor exactly. Position first: moving to another monitor can change the scale.
+fn place(win: &WebviewWindow, b: &Bounds) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = win.set_position(tauri::LogicalPosition::new(b.x, b.y));
+        let _ = win.set_size(tauri::LogicalSize::new(b.w, b.h));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = win.set_position(PhysicalPosition::new(b.x, b.y));
+        let _ = win.set_size(PhysicalSize::new(b.w, b.h));
+    }
+}
+
 /// Each overlay gets the visible windows on its monitor as `[x, y, w, h]` (monitor-relative
-/// physical px, clipped to the monitor), top-most first, so hovering can outline one.
-fn send_windows(app: &AppHandle, monitors: &[(i32, i32, u32, u32)]) {
+/// image px, clipped to the monitor), top-most first, so hovering can outline one.
+fn send_windows(app: &AppHandle, monitors: &[Bounds]) {
     let t = Instant::now();
     let me = std::process::id();
     // List order is z-order. Skip title/app_name (slow) and our own overlays.
@@ -177,8 +227,12 @@ fn send_windows(app: &AppHandle, monitors: &[(i32, i32, u32, u32)]) {
             Some((x, y, x + w.width().ok()? as i32, y + w.height().ok()? as i32))
         })
         .collect();
-    for (i, &(mx, my, mw, mh)) in monitors.iter().enumerate() {
-        let rects = clip_to_monitor(&wins, (mx, my, mw, mh));
+    for (i, b) in monitors.iter().enumerate() {
+        let k = b.scale;
+        let rects: Vec<[i32; 4]> = clip_to_monitor(&wins, (b.x, b.y, b.w, b.h))
+            .into_iter()
+            .map(|r| r.map(|v| (v as f64 * k).round() as i32))
+            .collect();
         let _ = app.emit_to(EventTarget::webview_window(format!("{PREFIX}{i}")), "overlay:windows", rects);
     }
     crate::log!("[capture] {} window rects in {} ms", wins.len(), t.elapsed().as_millis());
