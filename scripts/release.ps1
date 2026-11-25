@@ -93,3 +93,47 @@ Start-Sleep 5
 $served = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/latest.json"
 if ($served.version -ne $Version) { throw "latest.json is serving $($served.version), not $Version" }
 Write-Host "released ${Tag}: https://github.com/$Repo/releases/tag/$Tag"
+
+# --- Homebrew: `brew install --cask zahidhossin39/tap/shutter` reads Casks/shutter.rb in our tap
+$Tap = 'zahidhossin39/homebrew-tap'
+Run "gh release download $Tag --repo $Repo --pattern *.dmg --dir `"$tmp`" --clobber"
+$dmg = Get-ChildItem $tmp -Filter *.dmg | Select-Object -First 1
+if (-not $dmg) { throw 'no .dmg in the release' }
+$sha = (Get-FileHash $dmg.FullName -Algorithm SHA256).Hash.ToLower()
+$dmgName = $dmg.Name -replace [regex]::Escape($Version), '#{version}'
+$cask = @"
+cask "shutter" do
+  version "$Version"
+  sha256 "$sha"
+
+  url "https://github.com/$Repo/releases/download/v#{version}/$dmgName"
+  name "Shutter"
+  desc "Screenshot tool with blur, OCR, annotations and a drag-out shelf"
+  homepage "https://github.com/$Repo"
+
+  auto_updates true
+  depends_on macos: ">= :catalina"
+
+  app "Shutter.app"
+
+  # Not notarized yet: without this, macOS blocks the first launch.
+  postflight do
+    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Shutter.app"]
+  end
+
+  zap trash: [
+    "~/Library/Application Support/com.zaid-hossain.screenshot-app",
+    "~/Library/Caches/com.zaid-hossain.screenshot-app",
+    "~/Library/WebKit/com.zaid-hossain.screenshot-app",
+  ]
+end
+"@
+cmd /c "gh repo view $Tap >nul 2>nul"
+if ($LASTEXITCODE) { Run "gh repo create $Tap --public --description `"Homebrew tap for Shutter`"" }
+$existing = cmd /c "gh api repos/$Tap/contents/Casks/shutter.rb -q .sha 2>nul"
+$body = @{ message = "shutter $Version"; content = [Convert]::ToBase64String($Utf8.GetBytes($cask)) }
+if ($existing) { $body.sha = "$existing".Trim() }
+$bodyPath = Join-Path $tmp 'cask.json'
+[IO.File]::WriteAllText($bodyPath, ($body | ConvertTo-Json), $Utf8)
+Run "gh api -X PUT repos/$Tap/contents/Casks/shutter.rb --input `"$bodyPath`" --silent"
+Write-Host "Homebrew cask updated: brew install --cask zahidhossin39/tap/shutter"

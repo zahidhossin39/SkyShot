@@ -1,4 +1,6 @@
 {
+  "productName": "Shutter App",
+  "mainBinaryName": "shutter-app",
   "bundle": {
     "targets": ["appimage", "deb", "rpm"],
     "resources": { "ocr-models/": "ocr-models/" }
