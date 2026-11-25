@@ -182,7 +182,7 @@ impl X11 {
         if px.len() != (s.w * s.h * 4) as usize {
             return Err(format!("X11 capture: unsupported pixel format (depth {})", reply.depth));
         }
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             p.swap(0, 2); // BGRX -> RGBX
             p[3] = 255;
         }
