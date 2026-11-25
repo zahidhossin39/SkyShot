@@ -4,6 +4,7 @@ mod capture;
 mod history;
 mod hotkeys;
 mod ocr;
+mod os;
 mod output;
 mod screens;
 mod scroll;
@@ -167,11 +168,7 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
         return Err("Not a web link".into());
     }
     capture::close(&app); // the overlay is always on top and would hide the browser
-    std::process::Command::new("rundll32")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    os::open(&url)
 }
 
 fn is_web_link(url: &str) -> bool {
@@ -367,12 +364,7 @@ async fn history_copy(app: AppHandle, id: String) -> Result<(), String> {
 #[tauri::command]
 fn history_reveal(app: AppHandle, id: String) -> Result<(), String> {
     let path = history::image_path(&app, &id)?;
-    // `/select,<path>` must be one argument for explorer to highlight the file.
-    std::process::Command::new("explorer")
-        .arg(format!("/select,{}", path.display()))
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    os::reveal(&path)
 }
 
 /// Async on purpose: building a window inside a sync command deadlocks WebView2 on Windows,
@@ -474,11 +466,7 @@ fn reset_save_dir(app: AppHandle) -> Result<SettingsView, String> {
 #[tauri::command]
 fn open_logs() -> Result<(), String> {
     let dir = applog::dir().ok_or("No log folder")?;
-    std::process::Command::new("explorer")
-        .arg(dir)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    os::open(&dir.to_string_lossy())
 }
 
 #[tauri::command]
@@ -486,11 +474,7 @@ fn open_save_dir(app: AppHandle) -> Result<(), String> {
     let s = app.state::<AppState>().settings.lock().unwrap().clone();
     let dir = settings::save_dir(&app, &s);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::process::Command::new("explorer")
-        .arg(&dir)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    os::open(&dir.to_string_lossy())
 }
 
 /// Also applies to shots already in history (shortening deletes older ones, except starred).

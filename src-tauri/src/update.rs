@@ -11,18 +11,32 @@ use tauri_plugin_updater::UpdaterExt;
 pub struct Available {
     version: String,
     notes: Option<String>,
+    /// Installed by a package manager (.deb/.rpm): link to the download page instead.
+    manual: bool,
+}
+
+/// Where a manual update comes from.
+pub const RELEASES: &str = "https://github.com/zahidhossin39/shutter/releases/latest";
+
+/// On Linux only the AppImage can replace itself; .deb/.rpm installs belong to the package
+/// manager, and overwriting them would fight it.
+fn self_updating() -> bool {
+    !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
 }
 
 /// The newer version, or None if this one is the latest.
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> Result<Option<Available>, String> {
     let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
-    Ok(update.map(|u| Available { version: u.version, notes: u.body }))
+    Ok(update.map(|u| Available { version: u.version, notes: u.body, manual: !self_updating() }))
 }
 
 /// Downloads and runs the new installer, then restarts into the new version.
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    if !self_updating() {
+        return crate::os::open(RELEASES);
+    }
     let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
     let Some(update) = update else { return Err("Already up to date".into()) };
     update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
@@ -40,7 +54,11 @@ pub fn check_on_start(app: &AppHandle) {
             crate::output::notify(
                 &app,
                 &format!("Shutter {} is available", u.version),
-                "Open Settings (tray icon) → Settings to update.",
+                if u.manual {
+                    "Download it from the Shutter releases page (Settings → Settings has the link)."
+                } else {
+                    "Open Settings (tray icon) → Settings to update."
+                },
             );
         }
     });

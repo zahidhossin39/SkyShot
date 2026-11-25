@@ -1,13 +1,18 @@
 <#
-Release Shutter: bump the version, check, build the signed installer, write latest.json,
-commit, push and publish the GitHub release that installed copies update from.
+Release Shutter on every platform: bump the version, check, commit, tag and push. GitHub
+Actions (.github/workflows/release.yml) then builds Windows, macOS and Linux into a DRAFT
+release with one latest.json; this script waits for it, checks it, and publishes.
 
-  powershell -File scripts\release.ps1 -Version 0.2.2 -Notes "One-line summary" -NotesFile notes.md
-  add -DryRun to stop after the build (nothing committed, pushed or published)
+  powershell -File scripts\release.ps1 -Version 0.3.0 -Notes "One-line summary" -NotesFile notes.md
+  add -DryRun to stop after the checks (nothing committed, pushed or published)
+  test build without releasing: gh workflow run release.yml   (installers land as run artifacts)
 
 latest.json is what every installed copy reads to update. A wrong version, url or signature
-breaks updates for everyone, so this script builds it from the files it just made and checks
-it is served after publishing.
+breaks updates for everyone, so the draft is checked before it goes public and the served
+file is checked after.
+
+Needs the repo secret TAURI_SIGNING_PRIVATE_KEY = contents of ~/.tauri/shutter.key (the key
+every earlier release was signed with).
 #>
 param(
   [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
@@ -17,6 +22,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $Repo = 'zahidhossin39/shutter'
+$Tag = "v$Version"
 $Root = Split-Path $PSScriptRoot -Parent
 Set-Location $Root
 $Utf8 = New-Object Text.UTF8Encoding $false   # no BOM: serde and cargo reject one
@@ -30,56 +36,60 @@ function Edit($path, $pattern, $replacement) {
 }
 
 # --- preconditions
-$keyPath = Join-Path $HOME '.tauri\shutter.key'
-if (-not (Test-Path $keyPath)) { throw "signing key missing: $keyPath (without it installed copies can't update)" }
 if (-not (Test-Path $NotesFile)) { throw "notes file missing: $NotesFile" }
+if ($Notes -match '[\r\n"]') { throw 'Notes must be one line without double quotes' }
 if ((git rev-parse --abbrev-ref HEAD) -ne 'main') { throw 'release from main' }
 if (git status --porcelain) { throw 'working tree not clean: commit first' }
-if (git tag -l "v$Version") { throw "tag v$Version already exists" }
+if (git tag -l $Tag) { throw "tag $Tag already exists" }
+if (-not ((gh secret list --repo $Repo) -match '^TAURI_SIGNING_PRIVATE_KEY\s')) {
+  throw "repo secret TAURI_SIGNING_PRIVATE_KEY missing (gh secret set TAURI_SIGNING_PRIVATE_KEY --repo $Repo < ~/.tauri/shutter.key)"
+}
 
 # --- version bump (all five places)
 Edit 'src-tauri/tauri.conf.json' '"version": "\d+\.\d+\.\d+"' "`"version`": `"$Version`""
 Edit 'src-tauri/Cargo.toml' '^version = "\d+\.\d+\.\d+"' "version = `"$Version`""
 Edit 'src-tauri/Cargo.lock' '(name = "screenshot-app"\r?\nversion = )"\d+\.\d+\.\d+"' "`${1}`"$Version`""
 Run "npm version $Version --no-git-tag-version --allow-same-version"   # package.json + lock
-
-# --- check, then build signed
 Run 'npm run check'
-$env:TAURI_SIGNING_PRIVATE_KEY = [IO.File]::ReadAllText($keyPath)
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
-Run 'npm run tauri build'
-$exe = "src-tauri\target\release\bundle\nsis\Shutter_${Version}_x64-setup.exe"
-$sig = "$exe.sig"
-if (-not (Test-Path $exe) -or -not (Test-Path $sig)) { throw "build did not produce $exe and .sig" }
-
-# --- latest.json from the files just built
-$latest = [ordered]@{
-  version  = $Version
-  notes    = $Notes
-  pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-  platforms = @{ 'windows-x86_64' = [ordered]@{
-    signature = [IO.File]::ReadAllText((Join-Path $Root $sig)).Trim()
-    url       = "https://github.com/$Repo/releases/download/v$Version/Shutter_${Version}_x64-setup.exe"
-  } }
-}
-$latestPath = Join-Path $Root 'src-tauri\target\release\bundle\nsis\latest.json'
-[IO.File]::WriteAllText($latestPath, ($latest | ConvertTo-Json -Depth 5), $Utf8)
-Write-Host "built $exe ($([math]::Round((Get-Item $exe).Length / 1MB, 2)) MB) and latest.json"
 
 if ($DryRun) {
   git checkout -- package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
-  Write-Host 'dry run: version bump reverted, nothing committed, pushed or published'
+  Write-Host 'dry run: checks passed, version bump reverted, nothing committed, pushed or published'
   exit 0
 }
 
-# --- commit, push, publish
+# --- commit, tag (its message is the in-app note), push: the tag starts the build
 Run 'git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json'
 Run "git commit -q -m `"Version $Version`""
+Run "git tag -a $Tag -m `"$Notes`""
 Run 'git push origin main'
-Run "gh release create v$Version `"$exe`" `"$sig`" `"$latestPath`" --repo $Repo --target main --title `"Shutter $Version`" --notes-file `"$NotesFile`""
+Run "git push origin $Tag"
 
-# --- the updater reads this exact url; make sure it now says this version
-Start-Sleep 3
+# --- wait for the build
+Write-Host 'waiting for the release build (about 15-25 min)...'
+$runId = $null
+for ($i = 0; $i -lt 30 -and -not $runId; $i++) {
+  Start-Sleep 10
+  $runId = gh run list --repo $Repo --workflow release.yml --branch $Tag --limit 1 --json databaseId -q '.[0].databaseId'
+}
+if (-not $runId) { throw "no release build started for $Tag" }
+Run "gh run watch $runId --repo $Repo --exit-status --interval 60"
+
+# --- check the draft before anyone can update from it
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "shutter-$Tag"
+Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+Run "gh release download $Tag --repo $Repo --pattern latest.json --dir `"$tmp`""
+$latest = Get-Content (Join-Path $tmp 'latest.json') -Raw | ConvertFrom-Json
+if ($latest.version -ne $Version) { throw "draft latest.json says $($latest.version), not $Version" }
+foreach ($p in 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64', 'linux-x86_64') {
+  $entry = $latest.platforms.$p
+  if (-not $entry -or -not $entry.signature -or $entry.url -notmatch "/download/$Tag/") { throw "latest.json: $p missing or wrong" }
+}
+Write-Host 'draft latest.json covers Windows, macOS (both chips) and Linux'
+
+# --- publish, then make sure the updater url serves this version
+Run "gh release edit $Tag --repo $Repo --notes-file `"$NotesFile`" --draft=false --latest"
+Start-Sleep 5
 $served = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/latest.json"
 if ($served.version -ne $Version) { throw "latest.json is serving $($served.version), not $Version" }
-Write-Host "released v${Version}: https://github.com/$Repo/releases/tag/v$Version"
+Write-Host "released ${Tag}: https://github.com/$Repo/releases/tag/$Tag"

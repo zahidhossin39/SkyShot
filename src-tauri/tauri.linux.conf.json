@@ -1,5 +1,6 @@
 {
   "bundle": {
+    "targets": ["appimage", "deb", "rpm"],
     "resources": { "ocr-models/": "ocr-models/" }
   }
 }

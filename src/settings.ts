@@ -282,21 +282,26 @@ $("open-logs").addEventListener("click", () => invoke("open_logs").catch((e) => 
 
 const updateBtn = $<HTMLButtonElement>("update-btn");
 const updateStatus = $("update-status");
-let available: string | null = null;
+let available: { version: string; manual: boolean } | null = null;
 
 updateBtn.addEventListener("click", async () => {
   updateBtn.disabled = true;
   try {
     if (available) {
-      updateStatus.textContent = `Downloading ${available}… Shutter restarts when it's done.`;
+      // .deb/.rpm installs: Rust opens the download page instead of installing.
+      if (!available.manual) updateStatus.textContent = `Downloading ${available.version}… Shutter restarts when it's done.`;
       await invoke("install_update");
-      return; // the app restarts
+      return; // the app restarts (or the browser opened)
     }
     updateStatus.textContent = "Checking…";
-    const u = await invoke<{ version: string } | null>("check_update");
-    available = u?.version ?? null;
-    updateStatus.textContent = u ? `Version ${u.version} is available.` : "You have the latest version.";
-    updateBtn.textContent = u ? `Update to ${u.version}` : "Check for updates";
+    const u = await invoke<{ version: string; manual: boolean } | null>("check_update");
+    available = u;
+    updateStatus.textContent = u
+      ? u.manual
+        ? `Version ${u.version} is available. Install it with your package manager or from the download page.`
+        : `Version ${u.version} is available.`
+      : "You have the latest version.";
+    updateBtn.textContent = u ? (u.manual ? `Download ${u.version}` : `Update to ${u.version}`) : "Check for updates";
     updateBtn.classList.toggle("primary", !!u);
   } catch (e) {
     updateStatus.textContent = `Couldn't update: ${e}`;

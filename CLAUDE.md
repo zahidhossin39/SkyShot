@@ -21,7 +21,7 @@ Before each run:
 ## How things work (non-obvious)
 
 - Checks: `npm run check` (typecheck, JS tests, clippy -D warnings, Rust tests). The pre-commit hook runs the fast half; CI (`.github/workflows/check.yml`) runs all of it on push.
-- Releases: `scripts/release.ps1 -Version x.y.z -Notes "..." -NotesFile notes.md` (try `-DryRun` first). It bumps every version file, checks, builds signed, writes `latest.json`, pushes and publishes. Installed copies update from that `latest.json`. The signing key `~/.tauri/shutter.key` (no password) must never be lost: without it, installed copies can't update.
+- Releases: `scripts/release.ps1 -Version x.y.z -Notes "..." -NotesFile notes.md` (try `-DryRun` first). It bumps every version file, checks, commits, pushes an annotated tag; `.github/workflows/release.yml` builds Windows/macOS/Linux into a draft release with one `latest.json`; the script checks that file and publishes. Test build without a release: `gh workflow run release.yml`. Installed copies update from `latest.json`. The signing key `~/.tauri/shutter.key` (no password, also the repo secret `TAURI_SIGNING_PRIVATE_KEY`) must never be lost: without it, installed copies can't update.
 - Update e2e test that worked: build with `-- --config '{"version":"0.1.9"}'` plus a temporary `--update` single-instance hook calling `update::install_update`, install with `/S`, run `--update`; it became 0.2.0 in ~4 s.
 
 - Overlay windows (`overlay-N`, one per monitor) are pre-created hidden. Frame goes Rust -> page via WebView2 shared memory (`capture::post_frame`, `sharedbufferreceived` event), not IPC: IPC cost ~100 ms for 8 MB.

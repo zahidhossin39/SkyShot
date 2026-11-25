@@ -1,0 +1,74 @@
+name: release
+
+# Builds Shutter for Windows, macOS (one universal app) and Linux.
+# - Tag push vX.Y.Z (scripts/release.ps1 does it): uploads everything to a DRAFT release
+#   with one latest.json covering every platform; the script checks it, then publishes.
+# - Manual run (Actions > release > Run workflow): a test build, kept as run artifacts only.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ''
+          - os: macos-latest
+            args: '--target universal-apple-darwin'
+          # Oldest glibc we support (Ubuntu 22.04, Debian 12, Mint 21 and newer).
+          - os: ubuntu-22.04
+            args: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: release
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
+          sh scripts/get-ocr-models.sh
+      - run: npm ci
+
+      # The tag's message is the one-line note the in-app updater shows.
+      - name: Release note
+        id: note
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          git fetch -f origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          echo "text=$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents:subject)')" >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same minisign key as every earlier release, or installed copies stop updating.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: 'Shutter __VERSION__'
+          releaseBody: ${{ steps.note.outputs.text }}
+          releaseDraft: true
+          prerelease: false
+          updaterJsonPreferNsis: true
+          # Manual test builds: keep the installers as run artifacts instead of a release.
+          uploadWorkflowArtifacts: ${{ github.ref_type != 'tag' }}
