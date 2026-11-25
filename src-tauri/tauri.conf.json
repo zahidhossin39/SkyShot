@@ -28,7 +28,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "category": "Utility",
+    "shortDescription": "Screenshot tool with blur, OCR and annotations"
   },
   "plugins": {
     "updater": {
