@@ -162,6 +162,7 @@ struct X11 {
 #[cfg(target_os = "linux")]
 impl X11 {
     fn connect() -> Result<Self, String> {
+        use x11rb::connection::Connection;
         let (conn, n) = x11rb::connect(None).map_err(|e| format!("Couldn't reach the X server: {e}"))?;
         let root = conn.setup().roots[n].root;
         Ok(X11 { conn, root })
