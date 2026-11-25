@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/zahidhossin39/shutter/main/install.sh | sh
 #
-# macOS: the universal .dmg into /Applications.
+# macOS: the universal app into /Applications.
 # Linux: .deb on Debian/Ubuntu/Mint/Pop, .rpm on Fedora/RHEL/openSUSE, otherwise the
 # self-updating AppImage in ~/.local/bin (Arch, immutable distros, everything else).
 # Set SHUTTER_FORMAT=appimage|deb|rpm to choose yourself. On Linux the package and command are
@@ -20,9 +20,10 @@ have curl || fail "curl is needed"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-# Asset links of the newest release (no jq needed).
-assets=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
-  grep -o '"browser_download_url": *"[^"]*"' | sed 's/.*"\(https[^"]*\)"$/\1/') ||
+# Download links of the newest release, from the updater's latest.json: a plain download
+# (the GitHub API allows only 60 requests an hour per network). No jq needed.
+assets=$(curl -fsSL "https://github.com/$REPO/releases/latest/download/latest.json" |
+  grep -o '"url": *"[^"]*"' | sed 's/.*"\(https[^"]*\)"$/\1/' | sort -u) ||
   fail "couldn't reach GitHub"
 pick() { printf '%s\n' "$assets" | grep -E "$1" | head -n 1; }
 fetch() { # url file
@@ -32,16 +33,14 @@ fetch() { # url file
 }
 
 install_mac() {
-  dmg="$tmp/Shutter.dmg"
-  fetch "$(pick '\.dmg$')" "$dmg"
-  mnt="$tmp/mnt"
-  mkdir -p "$mnt"
-  hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+  # The universal .app (both chips), the same archive the in-app updater uses.
+  fetch "$(pick 'universal\.app\.tar\.gz$')" "$tmp/Shutter.app.tar.gz"
+  tar -xzf "$tmp/Shutter.app.tar.gz" -C "$tmp"
+  [ -d "$tmp/Shutter.app" ] || fail "unexpected download contents"
   app="/Applications/Shutter.app"
   osascript -e 'quit app "Shutter"' >/dev/null 2>&1 || true
-  if [ -w /Applications ]; then rm -rf "$app" && cp -R "$mnt/Shutter.app" /Applications/
-  else as_root rm -rf "$app" && as_root cp -R "$mnt/Shutter.app" /Applications/; fi
-  hdiutil detach "$mnt" -quiet || true
+  if [ -w /Applications ]; then rm -rf "$app" && mv "$tmp/Shutter.app" /Applications/
+  else as_root rm -rf "$app" && as_root mv "$tmp/Shutter.app" /Applications/; fi
   # Downloaded by curl, so there's no quarantine flag; clear it anyway in case.
   xattr -dr com.apple.quarantine "$app" 2>/dev/null || true
   say "Installed $app"
