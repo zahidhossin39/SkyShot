@@ -519,6 +519,21 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<SettingsView, String> 
     Ok(settings_view(&app))
 }
 
+/// "Start with Windows" stores the exe path that turned it on. If that was a stray copy (one
+/// launched from a packaged app like Claude desktop lives in its private LocalCache), sign-in
+/// kept starting that old copy and updates never showed. So whenever the real install starts,
+/// point the entry back at itself.
+fn refresh_autostart(app: &AppHandle) {
+    let al = app.autolaunch();
+    let Ok(exe) = std::env::current_exe() else { return };
+    let stray = exe.to_string_lossy().contains(r"\Packages\") && exe.to_string_lossy().contains(r"\LocalCache\");
+    if !stray && al.is_enabled().unwrap_or(false)
+        && let Err(e) = al.enable()
+    {
+        crate::log!("[autostart] refresh failed: {e}");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -618,6 +633,7 @@ pub fn run() {
             if first_run {
                 open_settings(handle);
             }
+            refresh_autostart(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
