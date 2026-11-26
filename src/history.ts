@@ -2,6 +2,7 @@
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { matches, snippet } from "./search";
 
 type Entry = { id: string; created: number; width: number; height: number; text: string; starred: boolean };
@@ -22,10 +23,12 @@ function syncTheme() {
   } catch {}
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
+  getCurrentWindow().setTheme(t === "light" || t === "dark" ? t : null).catch(() => {}); // title bar too
 }
 window.addEventListener("storage", (e) => {
   if (e.key === "shutter-theme" || e.key === null) syncTheme();
 });
+syncTheme(); // the <head> script painted the page; this also sets the title bar
 
 let entries: Entry[] = [];
 let toastTimer = 0;

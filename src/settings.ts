@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type Action = "capture" | "text";
 type SettingsView = {
@@ -186,6 +188,12 @@ $<HTMLInputElement>("autostart").addEventListener("change", async (e) => {
   }
 });
 
+// Pinning: Rust keeps it; the toolbar button and tray item change it too.
+const pinning = $<HTMLInputElement>("pinning");
+invoke<boolean>("get_pinning").then((on) => (pinning.checked = on), () => {});
+listen<boolean>("pinning:changed", (e) => (pinning.checked = e.payload));
+pinning.addEventListener("change", () => invoke("set_pinning", { enabled: pinning.checked }).catch((err) => showError(String(err))));
+
 $<HTMLSelectElement>("history-days").addEventListener("change", async (e) => {
   const select = e.target as HTMLSelectElement;
   const days = Number(select.value);
@@ -241,6 +249,8 @@ function readTheme(): Theme {
 function applyTheme(t: Theme) {
   if (t === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
+  // The title bar is drawn by Windows: tell it too, or it stays light in dark mode.
+  getCurrentWindow().setTheme(t === "system" ? null : t).catch(() => {});
   document.querySelectorAll<HTMLButtonElement>("#theme button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.themeChoice === t)),
   );
