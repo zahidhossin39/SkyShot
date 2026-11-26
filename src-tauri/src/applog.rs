@@ -31,7 +31,7 @@ pub fn init(dir: PathBuf) {
         write(&format!("[panic] {info}"));
         default(info);
     }));
-    write(&format!("[start] Shutter {}", env!("CARGO_PKG_VERSION")));
+    write(&format!("[start] Sky Shot {}", env!("CARGO_PKG_VERSION")));
 }
 
 fn roll(path: &Path, old: &Path) {

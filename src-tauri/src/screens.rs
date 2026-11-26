@@ -191,7 +191,7 @@ impl X11 {
 }
 
 /// org.freedesktop.portal.Screenshot, non-interactive. GNOME asks the user once whether
-/// Shutter may take screenshots; KDE and wlroots portals just answer.
+/// Sky Shot may take screenshots; KDE and wlroots portals just answer.
 #[cfg(target_os = "linux")]
 fn portal_screenshot() -> Result<RgbaImage, String> {
     use std::collections::HashMap;

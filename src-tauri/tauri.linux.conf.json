@@ -1,8 +1,11 @@
 {
-  "productName": "Shutter App",
-  "mainBinaryName": "shutter-app",
+  "mainBinaryName": "sky-shot",
   "bundle": {
     "targets": ["appimage", "deb", "rpm"],
-    "resources": { "ocr-models/": "ocr-models/" }
+    "resources": { "ocr-models/": "ocr-models/" },
+    "linux": {
+      "deb": { "conflicts": ["shutter-app"], "replaces": ["shutter-app"] },
+      "rpm": { "conflicts": ["shutter-app"], "obsoletes": ["shutter-app"] }
+    }
   }
 }

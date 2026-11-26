@@ -180,7 +180,7 @@ fn ensure_window(app: &AppHandle) {
         return;
     }
     let built = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("shelf.html".into()))
-        .title("Shutter shelf")
+        .title("Sky Shot shelf")
         .inner_size(WIN_W, 200.0)
         .decorations(false)
         .transparent(true)

@@ -16,7 +16,7 @@ pub struct Available {
 }
 
 /// Where a manual update comes from.
-pub const RELEASES: &str = "https://github.com/zahidhossin39/shutter/releases/latest";
+pub const RELEASES: &str = "https://github.com/zahidhossin39/sky-shot/releases/latest";
 
 /// On Linux only the AppImage can replace itself; .deb/.rpm installs belong to the package
 /// manager, and overwriting them would fight it.
@@ -53,9 +53,9 @@ pub fn check_on_start(app: &AppHandle) {
         if let Ok(Some(u)) = found {
             crate::output::notify(
                 &app,
-                &format!("Shutter {} is available", u.version),
+                &format!("Sky Shot {} is available", u.version),
                 if u.manual {
-                    "Download it from the Shutter releases page (Settings → Settings has the link)."
+                    "Download it from the Sky Shot releases page (Settings → Settings has the link)."
                 } else {
                     "Open Settings (tray icon) → Settings to update."
                 },

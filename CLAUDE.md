@@ -1,11 +1,11 @@
-# Shutter (screenshot app)
+# Sky Shot (screenshot app, formerly Shutter)
 
 Read `SPEC.md` first. It holds every product decision, the roadmap (v1/v2/v3) and spike results.
 
 - Stack: Tauri 2 (TypeScript UI, Rust core), Windows first.
 - When a decision changes, update SPEC.md in the same commit.
 - Git co-author line: leave it out (owner, 2026-11-13).
-- GitHub: public repo `zahidhossin39/shutter`, MIT. Ask before every push.
+- GitHub: public repo `zahidhossin39/sky-shot` (renamed from `shutter` 2026-11-27; GitHub redirects old links), MIT. Ask before every push.
 
 Status, what's released and the hand-test list: SPEC.md §11.
 

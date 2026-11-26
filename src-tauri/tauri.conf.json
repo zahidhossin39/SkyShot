@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Shutter",
+  "productName": "Sky Shot",
   "version": "0.3.2",
   "identifier": "com.zaid-hossain.screenshot-app",
   "build": {
@@ -30,13 +30,16 @@
     ],
     "createUpdaterArtifacts": true,
     "category": "Utility",
+    "windows": {
+      "nsis": { "installerHooks": "windows/hooks.nsh" }
+    },
     "shortDescription": "Screenshot tool with blur, OCR and annotations"
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2OTM1RTE2QjhFNTZGMDEKUldRQmIrVzRGbDZUaG9tQ3hlSWhlODRFVUhMemE4bHhTSmJNYXlORjdIeDBKZURoZ0RqNEZVS3IK",
       "endpoints": [
-        "https://github.com/zahidhossin39/shutter/releases/latest/download/latest.json"
+        "https://github.com/zahidhossin39/sky-shot/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

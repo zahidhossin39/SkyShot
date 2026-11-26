@@ -40,7 +40,7 @@ pub fn open_settings(app: &AppHandle) {
         return;
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("Shutter — Settings")
+        .title("Sky Shot — Settings")
         .inner_size(820.0, 600.0)
         .resizable(false)
         .maximizable(false)
@@ -56,7 +56,7 @@ pub fn open_history(app: &AppHandle) {
         return;
     }
     let _ = WebviewWindowBuilder::new(app, "history", WebviewUrl::App("history.html".into()))
-        .title("Shutter — History")
+        .title("Sky Shot — History")
         .inner_size(960.0, 680.0)
         .min_inner_size(520.0, 400.0)
         .center()

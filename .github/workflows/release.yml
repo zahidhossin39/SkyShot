@@ -1,6 +1,6 @@
 name: release
 
-# Builds Shutter for Windows, macOS (one universal app) and Linux.
+# Builds Sky Shot for Windows, macOS (one universal app) and Linux.
 # - Tag push vX.Y.Z (scripts/release.ps1 does it): uploads everything to a DRAFT release
 #   with one latest.json covering every platform; the script checks it, then publishes.
 # - Manual run (Actions > release > Run workflow): a test build, kept as run artifacts only.
@@ -65,7 +65,7 @@ jobs:
         with:
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-          releaseName: 'Shutter __VERSION__'
+          releaseName: 'Sky Shot __VERSION__'
           releaseBody: ${{ steps.note.outputs.text }}
           releaseDraft: true
           prerelease: false

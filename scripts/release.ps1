@@ -1,5 +1,5 @@
 <#
-Release Shutter on every platform: bump the version, check, commit, tag and push. GitHub
+Release Sky Shot on every platform: bump the version, check, commit, tag and push. GitHub
 Actions (.github/workflows/release.yml) then builds Windows, macOS and Linux into a DRAFT
 release with one latest.json; this script waits for it, checks it, and publishes.
 
@@ -22,7 +22,7 @@ param(
   [switch]$Resume   # the tag is already pushed (an earlier run stopped): wait, check, publish
 )
 $ErrorActionPreference = 'Stop'
-$Repo = 'zahidhossin39/shutter'
+$Repo = 'zahidhossin39/sky-shot'
 $Tag = "v$Version"
 $Root = Split-Path $PSScriptRoot -Parent
 Set-Location $Root
@@ -80,7 +80,7 @@ if (-not $runId) { throw "no release build started for $Tag" }
 Run "gh run watch $runId --repo $Repo --exit-status --interval 60"
 
 # --- check the draft before anyone can update from it
-$tmp = Join-Path ([IO.Path]::GetTempPath()) "shutter-$Tag"
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "skyshot-$Tag"
 Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 Run "gh release download $Tag --repo $Repo --pattern latest.json --dir `"$tmp`""
 $latestPath = Join-Path $tmp 'latest.json'
@@ -109,7 +109,7 @@ $served = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/l
 if ($served.version -ne $Version) { throw "latest.json is serving $($served.version), not $Version" }
 Write-Host "released ${Tag}: https://github.com/$Repo/releases/tag/$Tag"
 
-# --- Homebrew: `brew install --cask zahidhossin39/tap/shutter` reads Casks/shutter.rb in our tap
+# --- Homebrew: `brew install --cask zahidhossin39/tap/sky-shot` reads Casks/sky-shot.rb in our tap
 $Tap = 'zahidhossin39/homebrew-tap'
 Run "gh release download $Tag --repo $Repo --pattern *.dmg --dir `"$tmp`" --clobber"
 $dmg = Get-ChildItem $tmp -Filter *.dmg | Select-Object -First 1
@@ -117,23 +117,23 @@ if (-not $dmg) { throw 'no .dmg in the release' }
 $sha = (Get-FileHash $dmg.FullName -Algorithm SHA256).Hash.ToLower()
 $dmgName = $dmg.Name -replace [regex]::Escape($Version), '#{version}'
 $cask = @"
-cask "shutter" do
+cask "sky-shot" do
   version "$Version"
   sha256 "$sha"
 
   url "https://github.com/$Repo/releases/download/v#{version}/$dmgName"
-  name "Shutter"
+  name "Sky Shot"
   desc "Screenshot tool with blur, OCR, annotations and a drag-out shelf"
   homepage "https://github.com/$Repo"
 
   auto_updates true
   depends_on macos: ">= :catalina"
 
-  app "Shutter.app"
+  app "Sky Shot.app"
 
   # Not notarized yet: without this, macOS blocks the first launch.
   postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Shutter.app"]
+    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Sky Shot.app"]
   end
 
   zap trash: [
@@ -144,11 +144,11 @@ cask "shutter" do
 end
 "@
 cmd /c "gh repo view $Tap >nul 2>nul"
-if ($LASTEXITCODE) { Run "gh repo create $Tap --public --description `"Homebrew tap for Shutter`"" }
-$existing = cmd /c "gh api repos/$Tap/contents/Casks/shutter.rb -q .sha 2>nul"
-$body = @{ message = "shutter $Version"; content = [Convert]::ToBase64String($Utf8.GetBytes($cask)) }
+if ($LASTEXITCODE) { Run "gh repo create $Tap --public --description `"Homebrew tap for Sky Shot`"" }
+$existing = cmd /c "gh api repos/$Tap/contents/Casks/sky-shot.rb -q .sha 2>nul"
+$body = @{ message = "sky-shot $Version"; content = [Convert]::ToBase64String($Utf8.GetBytes($cask)) }
 if ($existing) { $body.sha = "$existing".Trim() }
 $bodyPath = Join-Path $tmp 'cask.json'
 [IO.File]::WriteAllText($bodyPath, ($body | ConvertTo-Json), $Utf8)
-Run "gh api -X PUT repos/$Tap/contents/Casks/shutter.rb --input `"$bodyPath`" --silent"
-Write-Host "Homebrew cask updated: brew install --cask zahidhossin39/tap/shutter"
+Run "gh api -X PUT repos/$Tap/contents/Casks/sky-shot.rb --input `"$bodyPath`" --silent"
+Write-Host "Homebrew cask updated: brew install --cask zahidhossin39/tap/sky-shot"

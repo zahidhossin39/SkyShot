@@ -299,7 +299,7 @@ updateBtn.addEventListener("click", async () => {
   try {
     if (available) {
       // .deb/.rpm installs: Rust opens the download page instead of installing.
-      if (!available.manual) updateStatus.textContent = `Downloading ${available.version}… Shutter restarts when it's done.`;
+      if (!available.manual) updateStatus.textContent = `Downloading ${available.version}… Sky Shot restarts when it's done.`;
       await invoke("install_update");
       return; // the app restarts (or the browser opened)
     }
