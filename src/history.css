@@ -1,58 +1,52 @@
-/* Shared tokens with Settings (theme.css); names below map onto them. */
+/* History window, Material 3. Shared tokens with Settings (theme.css). */
 @import "./theme.css";
 
 :root {
-  --card: var(--panel);
-  --border: var(--line);
-  --star: #eab308;
-  --mark: #fde68a;
+  --mark: var(--md-sys-color-tertiary-container);
+  --on-mark: var(--md-sys-color-on-tertiary-container);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --mark: #854d0e;
-  }
-}
-
-:root[data-theme="dark"] {
-  --mark: #854d0e;
-}
-
+/* Top app bar: search bar, a filter chip and the count. */
 header {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--md-sys-color-surface);
 }
 
+/* M3 search bar: full pill on surface-container-high. */
 .search {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   max-width: 560px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card);
+  height: 48px;
+  padding: 0 20px 0 16px;
+  box-sizing: border-box;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  transition: background-color 150ms, box-shadow 150ms;
+}
+
+.search:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), var(--md-sys-color-surface-container-high));
 }
 
 .search:focus-within {
-  border-color: var(--accent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-primary);
 }
 
 .search svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   flex: none;
   fill: none;
-  stroke: var(--muted);
+  stroke: var(--md-sys-color-on-surface-variant);
   stroke-width: 2;
   stroke-linecap: round;
 }
@@ -60,75 +54,143 @@ header {
 #q {
   flex: 1;
   min-width: 0;
-  height: 36px;
+  height: 100%;
   border: 0;
   outline: 0;
   background: none;
-  color: var(--fg);
-  font: inherit;
+  color: var(--md-sys-color-on-surface);
+  font-size: 15px;
 }
 
-.toggle {
-  display: flex;
+#q::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Filter chip on a real checkbox. */
+.chip-filter {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: 8px;
+  height: 32px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 150ms, border-color 150ms;
 }
 
-.toggle input {
-  accent-color: var(--accent);
+.chip-filter:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) var(--md-state-hover), transparent);
+}
+
+.chip-filter:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) var(--md-state-press), transparent);
+}
+
+.chip-filter input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.chip-filter:has(input:focus-visible) {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+
+.chip-filter:has(input:checked) {
+  padding-left: 8px;
+  border-color: transparent;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.chip-filter:has(input:checked):hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-hover), var(--md-sys-color-secondary-container));
+}
+
+.chip-filter:has(input:checked):active {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-press), var(--md-sys-color-secondary-container));
+}
+
+.chip-filter:has(input:checked)::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 #count {
   margin-left: auto;
-  color: var(--muted);
+  color: var(--md-sys-color-on-surface-variant);
   font-size: 13px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------------------------------------------------------------- grid */
+
 #grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-  padding: 18px 20px 28px;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 16px;
+  padding: 8px 24px 32px;
 }
 
+/* Filled card on the tonal step above the page. */
 .card {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-row);
   overflow: hidden;
+  transition: box-shadow 200ms var(--md-sys-motion-easing-standard);
+}
+
+.card:hover {
+  box-shadow: var(--md-elevation-2);
 }
 
 .thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 150px;
+  height: 152px;
+  margin: 8px 8px 0;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  /* Checkerboard-free neutral, so screenshots with white edges still read as a picture. */
-  background: color-mix(in srgb, var(--muted) 12%, var(--card));
-  cursor: pointer;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-high);
+  overflow: hidden;
+  cursor: zoom-in;
 }
 
 .thumb img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  transition: transform 250ms var(--md-sys-motion-easing-emphasized);
+}
+
+.thumb:hover img {
+  transform: scale(1.03);
 }
 
 .meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 6px 2px 12px;
-  font-size: 13px;
+  padding: 8px 4px 0 14px;
 }
 
 .meta time {
@@ -136,107 +198,146 @@ header {
 }
 
 .meta .dims {
-  color: var(--muted);
+  color: var(--md-sys-color-on-surface-variant);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
+/* Icon toggle button */
 .star {
+  display: grid;
+  place-items: center;
   margin-left: auto;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 50%;
   background: none;
-  color: var(--muted);
-  font-size: 17px;
-  line-height: 1;
+  color: var(--md-sys-color-on-surface-variant);
   cursor: pointer;
+  transition: background-color 150ms, color 150ms;
 }
 
-.star[aria-pressed="true"] {
-  color: var(--star);
+.star svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
 }
 
 .star:hover {
-  background: var(--key-bg);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) var(--md-state-hover), transparent);
+}
+
+.star[aria-pressed="true"] {
+  color: var(--md-sys-color-tertiary);
+}
+
+.star[aria-pressed="true"] svg {
+  fill: currentColor;
 }
 
 .snip {
-  margin: 2px 12px 0;
-  color: var(--muted);
+  margin: 2px 14px 0;
+  color: var(--md-sys-color-on-surface-variant);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 16px;
   overflow-wrap: anywhere;
 }
 
 .snip mark {
-  background: var(--mark);
-  color: inherit;
+  padding: 0 2px;
   border-radius: 2px;
+  background: var(--mark);
+  color: var(--on-mark);
 }
 
+/* Text buttons */
 .actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin-top: auto;
-  padding: 8px 10px 10px;
+  padding: 6px 6px 8px;
 }
 
 .actions button {
-  font: inherit;
-  font-size: 12px;
-  color: var(--fg);
-  background: var(--key-bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 9px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: none;
+  color: var(--md-sys-color-primary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+}
+
+.actions button:active {
+  background: color-mix(in srgb, var(--md-sys-color-primary) var(--md-state-press), transparent);
 }
 
 .actions button:hover {
-  border-color: var(--muted);
+  background: color-mix(in srgb, var(--md-sys-color-primary) var(--md-state-hover), transparent);
 }
 
 .actions .del {
   margin-left: auto;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.actions .del:hover {
+  color: var(--md-sys-color-error);
+  background: color-mix(in srgb, var(--md-sys-color-error) var(--md-state-hover), transparent);
 }
 
 .actions .del.confirm {
-  color: #fff;
-  background: var(--danger);
-  border-color: var(--danger);
-}
-
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  color: var(--md-sys-color-on-error);
+  background: var(--md-sys-color-error);
 }
 
 #empty {
-  margin: 80px auto;
+  margin: 96px auto;
   max-width: 360px;
   text-align: center;
-  color: var(--muted);
+  color: var(--md-sys-color-on-surface-variant);
   line-height: 1.5;
 }
 
+/* Snackbar */
 #toast {
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: 24px;
   transform: translateX(-50%);
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: #18181b;
-  color: #f4f4f5;
-  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  box-shadow: var(--md-elevation-3);
+  animation: rise 200ms var(--md-sys-motion-easing-emphasized-decelerate);
 }
 
-/* ---------------------------------------------------------------- viewer */
+/* ---------------------------------------------------------------- viewer (always dark) */
 
 #viewer {
+  /* Scope M3 dark-scheme roles so viewer components never use raw hex. */
+  --md-sys-color-primary: #82d3e3;
+  --md-sys-color-on-primary: #00363e;
+  --md-sys-color-secondary: #b1cbd1;
+  --md-sys-color-surface-container-lowest: #090f10;
+  --md-sys-color-surface-container-high: #252b2c;
+  --md-sys-color-on-surface: #dee3e5;
+  --md-sys-color-on-surface-variant: #bfc8ca;
+
   position: fixed;
   inset: 0;
   z-index: 2;
@@ -244,61 +345,103 @@ button:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  background: rgba(9, 9, 11, 0.88);
-  animation: fade 120ms ease-out;
+  gap: 16px;
+  padding: 24px;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 90%, transparent);
+  animation: fade 150ms ease-out;
 }
 
 #viewer-img {
   max-width: 100%;
-  max-height: calc(100% - 56px);
+  max-height: calc(100% - 64px);
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: var(--md-sys-shape-corner-medium);
   box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.7);
 }
 
+/* Floating toolbar, dark-scheme tokens. */
 .viewer-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px;
-  border-radius: 10px;
-  background: #18181b;
-  color: #ececef;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-elevation-3);
 }
 
 .viewer-bar button {
-  min-width: 32px;
-  height: 30px;
-  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--md-sys-shape-corner-full);
   background: transparent;
   color: inherit;
-  font: inherit;
-  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.viewer-bar button.icon {
+  padding: 0;
+}
+
+.viewer-bar button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .viewer-bar button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), transparent);
+}
+
+.viewer-bar button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-press), transparent);
+}
+
+.viewer-bar button.filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.viewer-bar button.filled:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-primary) var(--md-state-hover), var(--md-sys-color-primary));
+}
+
+.viewer-bar button.filled:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-primary) var(--md-state-press), var(--md-sys-color-primary));
 }
 
 .viewer-bar button:disabled {
-  opacity: 0.3;
+  opacity: 0.38;
   cursor: default;
 }
 
 #viewer-info {
   padding: 0 8px;
   font-size: 12px;
-  color: #a1a1aa;
+  color: var(--md-sys-color-on-surface-variant);
   font-variant-numeric: tabular-nums;
 }
 
 @keyframes fade {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
   }
 }

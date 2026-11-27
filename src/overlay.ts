@@ -33,7 +33,7 @@ type Drag =
   // rest (for hold-to-snap). snap: the shape it snapped to, resized while you keep dragging.
   | { kind: "pen"; origin: Point; at: Point; still: Point; straight?: boolean; snap?: { shape: Shape; from: Point } };
 
-const ACCENT = "#3b82f6";
+const ACCENT = "#499cab"; // M3 primary, tone 60 of the logo's sky blue: reads on dimmed and bright pixels
 const MIN_SIZE = 3;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;

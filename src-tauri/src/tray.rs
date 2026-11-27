@@ -28,8 +28,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     *app.state::<AppState>().tray_items.lock().unwrap() = Some((capture_i, text_i));
     refresh_labels(app);
 
+    // The "hidden icon" (src-tauri/icons/tray.png, 64x64): the stars alone on transparency,
+    // cropped tight for crisp HiDPI scaling across Windows/macOS/Linux tray slots. The app icon
+    // keeps its sky background for taskbar/Start. Embedded at compile time; build.rs watches icons/.
     TrayIconBuilder::with_id("main")
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tauri::include_image!("icons/tray.png"))
         .tooltip("Sky Shot")
         .menu(&menu)
         .show_menu_on_left_click(false)

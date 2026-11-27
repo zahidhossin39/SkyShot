@@ -18,9 +18,9 @@
     <header>
       <div class="search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
-        <input id="q" type="search" placeholder="Search text in your screenshots…" autocomplete="off" spellcheck="false" />
+        <input id="q" type="search" placeholder="Search text in your screenshots…" aria-label="Search screenshots" autocomplete="off" spellcheck="false" />
       </div>
-      <label class="toggle"><input type="checkbox" id="only-starred" /> Starred</label>
+      <label class="chip-filter"><input type="checkbox" id="only-starred" /> Starred</label>
       <span id="count"></span>
     </header>
     <main id="grid"></main>
@@ -28,11 +28,17 @@
     <div id="viewer" role="dialog" aria-modal="true" aria-label="Screenshot" hidden>
       <img id="viewer-img" alt="" />
       <div class="viewer-bar">
-        <button id="viewer-prev" title="Previous (←)" aria-label="Previous">‹</button>
+        <button id="viewer-prev" class="icon" title="Previous (←)" aria-label="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+        </button>
         <span id="viewer-info"></span>
-        <button id="viewer-next" title="Next (→)" aria-label="Next">›</button>
-        <button id="viewer-copy">Copy</button>
-        <button id="viewer-close" title="Close (Esc)" aria-label="Close">✕</button>
+        <button id="viewer-next" class="icon" title="Next (→)" aria-label="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+        </button>
+        <button id="viewer-copy" class="filled">Copy</button>
+        <button id="viewer-close" class="icon" title="Close (Esc)" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
       </div>
     </div>
     <div id="toast" role="status" hidden></div>

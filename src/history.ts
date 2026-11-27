@@ -23,7 +23,9 @@ function syncTheme() {
   } catch {}
   if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
-  getCurrentWindow().setTheme(t === "light" || t === "dark" ? t : null).catch(() => {}); // title bar too
+  try {
+    getCurrentWindow().setTheme(t === "light" || t === "dark" ? t : null).catch(() => {}); // title bar too
+  } catch {}
 }
 window.addEventListener("storage", (e) => {
   if (e.key === "shutter-theme" || e.key === null) syncTheme();
@@ -65,7 +67,8 @@ function card(e: Entry, query: string) {
   const thumb = el("button", { className: "thumb", title: "View" }, img);
   thumb.onclick = () => view(e);
 
-  const star = el("button", { className: "star", textContent: e.starred ? "★" : "☆", title: e.starred ? "Starred: kept forever" : "Star to keep forever" });
+  const star = el("button", { className: "star", title: e.starred ? "Starred: kept forever" : "Star to keep forever" });
+  star.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" /></svg>';
   star.setAttribute("aria-pressed", String(e.starred));
   star.setAttribute("aria-label", "Star");
   star.onclick = async () => {

@@ -275,3 +275,8 @@ Owner's call. Repo `zahidhossin39/SkyShot` (GitHub redirects `shutter` links, so
 - Windows: NSIS keys installs by product name, so an update would install Sky Shot next to Shutter. `src-tauri/windows/hooks.nsh` (post-install) deletes the old program folder, shortcuts and Installed-apps entry, and moves the "start with Windows" value to the new name.
 - Linux: package and command `skyshot`; the deb/rpm replace/obsolete `shutter-app`. The `shutter-app` naming workaround is gone.
 - macOS: `Sky Shot.app`. The in-app updater replaces the bundle in place, so an updated copy keeps the folder name Shutter.app; install.sh and the new `skyshot` cask install `Sky Shot.app` and remove an old Shutter.app.
+
+## Branding and Material Design 3 UI (2026-11-27)
+- **App icon:** `src-tauri/icons/app-icon.png` (1024×1024, sky-to-amber gradient with 5 white stars, replacing `app-icon.svg`) generates all desktop/store icons via `npm run tauri icon src-tauri/icons/app-icon.png`. `src/assets/logo.png` provides the Settings brand mark.
+- **Hidden tray icon (`src-tauri/icons/tray.png`):** the 5 gradient stars alone on transparency (64×64 PNG cropped tight to the stars for crisp HiDPI scaling), embedded in `tray.rs` via `tauri::include_image!("icons/tray.png")`. Taskbar/Start/installer keep the sky-gradient app icon. `src-tauri/build.rs` emits `cargo:rerun-if-changed=icons` so icon updates re-embed automatically.
+- **UI refresh (Material Design 3):** Settings, History, Shelf, and Overlay updated to minimal Material Design 3 tokens (`src/theme.css`: semantic colour roles, tonal surfaces, typography/shape scales, state layers) across light and dark themes.

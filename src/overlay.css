@@ -1,16 +1,34 @@
+/* Capture overlay: always the dark scheme of the app's Material 3 palette (see theme.css). */
 :root {
-  --accent: #3b82f6;
-  --accent-strong: #2563eb;
-  --accent-soft: rgba(59, 130, 246, 0.22);
-  --bar-bg: #18181b;
-  --bar-raised: #232328;
-  --bar-fg: #ececef;
-  --bar-muted: #a1a1aa;
-  --bar-hover: rgba(255, 255, 255, 0.08);
-  --bar-line: rgba(255, 255, 255, 0.09);
-  --shadow: 0 10px 30px -6px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --md-primary: #82d3e3;
+  --md-on-primary: #00363e;
+  --md-secondary-container: #334b4f;
+  --md-on-secondary-container: #cde7ed;
+  --md-surface-lowest: #090f10;
+  --md-surface-container: #1b2122;
+  --md-surface-high: #252b2c;
+  --md-surface-highest: #303637;
+  --md-on-surface: #dee3e5;
+  --md-on-surface-variant: #bfc8ca;
+  --md-outline-variant: #3f484a;
+  --accent: var(--md-primary);
+  --accent-strong: color-mix(in srgb, var(--md-on-primary) 10%, var(--md-primary));
+  --accent-soft: var(--md-secondary-container);
+  --bar-bg: var(--md-surface-container);
+  --bar-raised: var(--md-surface-high);
+  --bar-fg: var(--md-on-surface);
+  --bar-muted: var(--md-on-surface-variant);
+  --bar-hover: rgba(222, 227, 229, 0.08);
+  --bar-press: rgba(222, 227, 229, 0.1);
+  --bar-line: var(--md-outline-variant);
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-full: 9999px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 10px 30px -6px rgba(0, 0, 0, 0.45);
+  --ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   font-size: 13px;
 }
 
@@ -65,9 +83,9 @@ body.leaving > *:not(#view) {
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 7px 14px;
+  padding: 8px 16px;
   border-radius: 999px;
-  background: var(--bar-bg);
+  background: var(--bar-raised);
   color: var(--bar-fg);
   box-shadow: var(--shadow);
   pointer-events: none;
@@ -78,8 +96,8 @@ body.leaving > *:not(#view) {
 #tip kbd {
   font: 600 11px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif;
   padding: 3px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-surface-highest);
   color: var(--bar-fg);
 }
 
@@ -105,7 +123,7 @@ body.leaving > *:not(#view) {
 #loupe {
   position: fixed;
   width: 120px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--bar-bg);
   box-shadow: var(--shadow);
@@ -140,11 +158,11 @@ body.leaving > *:not(#view) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px;
-  border-radius: 12px;
+  padding: 6px;
+  border-radius: 16px;
   background: var(--bar-bg);
   box-shadow: var(--shadow);
-  animation: rise 160ms var(--ease-out);
+  animation: rise 200ms var(--ease-out);
 }
 
 #smart-status {
@@ -185,33 +203,42 @@ button {
   height: 34px;
   padding: 0 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--bar-fg);
   font: inherit;
   cursor: pointer;
-  transition: background-color 120ms, color 120ms;
+  transition: background-color 150ms, color 150ms;
 }
 
 button:hover {
   background: var(--bar-hover);
 }
 
+button:active {
+  background: var(--bar-press);
+}
+
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--md-on-secondary-container);
   outline-offset: 1px;
 }
 
-/* Active tool: tinted fill plus accent icon, readable at a glance. */
+/* Active tool: secondary-container fill, readable at a glance. */
 button.active,
 #toolbar button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: #9cc3ff;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+button.active:hover,
+#toolbar button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container));
 }
 
 button.label {
-  padding: 0 12px;
-  font-weight: 500;
+  padding: 0 14px;
+  font-weight: 600;
 }
 
 button.label svg {
@@ -219,16 +246,20 @@ button.label svg {
 }
 
 button.primary {
-  background: var(--accent);
-  color: #fff;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
 }
 
 button.primary:hover {
   background: var(--accent-strong);
 }
 
+button.primary:active {
+  background: color-mix(in srgb, var(--md-on-primary) 14%, var(--md-primary));
+}
+
 button:disabled {
-  opacity: 0.35;
+  opacity: 0.38;
   cursor: default;
   background: transparent;
 }
@@ -257,8 +288,8 @@ button svg .faint {
 #tip {
   position: fixed;
   max-width: 240px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: var(--bar-raised);
   color: var(--bar-fg);
   box-shadow: var(--shadow);
@@ -295,12 +326,12 @@ button svg .faint {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
-  border-radius: 12px;
+  padding: 12px;
+  border-radius: 16px;
   background: var(--bar-bg);
   box-shadow: var(--shadow);
   color: var(--bar-fg);
-  animation: rise 160ms var(--ease-out);
+  animation: rise 200ms var(--ease-out);
 }
 
 .panel-head,
@@ -328,11 +359,11 @@ button svg .faint {
 button.chip {
   min-width: 0;
   max-width: 150px;
-  height: 28px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 12px;
   border: 1px solid var(--bar-line);
-  border-radius: 999px;
-  color: #9cc3ff;
+  border-radius: 8px;
+  color: var(--md-primary);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -357,10 +388,10 @@ button.chip {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: var(--bar-bg);
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--bar-raised);
   box-shadow: var(--shadow);
   white-space: nowrap;
 }
@@ -432,7 +463,7 @@ button.chip {
 }
 
 #livetext ::selection {
-  background: rgba(59, 130, 246, 0.4);
+  background: rgba(130, 211, 227, 0.4);
 }
 
 #text-status {
@@ -455,10 +486,10 @@ button.chip {
 #text-out {
   height: 160px;
   resize: vertical;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--bar-line);
-  background: #0f0f11;
+  background: var(--md-surface-lowest);
   color: var(--bar-fg);
   /* Monospace because OCR output is often code, keys or URLs, where spacing matters. */
   font: 13px/1.5 "Cascadia Mono", Consolas, monospace;

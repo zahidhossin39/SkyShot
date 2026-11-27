@@ -1,28 +1,85 @@
-/* Shared look for the app's windows (Settings, History). The capture overlay keeps its own
-   dark toolbar; these tokens use the same blue so it all reads as one app. */
+/* Material Design 3 tokens for the app's windows (Settings, History, Shelf).
+   Colour roles come from a tonal-spot scheme seeded with the logo's sky blue (#89b8c2);
+   tertiary is the logo's sunset amber (#ffb53c). Generated with @material/material-color-utilities.
+   The capture overlay (overlay.css) uses the dark scheme of the same palette.
+   Components use the roles below, never raw hex. */
 :root {
   color-scheme: light;
-  --bg: #f3f3f6;
-  --panel: #ffffff;
-  --fg: #18181c;
-  --muted: #5d5e67;
-  --line: #e2e2e8;
-  --line-strong: #cfcfd8;
-  --hover: rgba(24, 24, 28, 0.05);
-  --accent: #2563eb;
-  --accent-fg: #ffffff;
-  --accent-soft: rgba(37, 99, 235, 0.1);
-  --accent-text: #1d4ed8;
-  --ok: #15803d;
-  --warn: #b45309;
-  --danger: #dc2626;
-  --key-bg: #f6f6f9;
-  --key-edge: #c9c9d3;
-  --field: #ffffff;
-  --shadow: 0 1px 2px rgba(16, 16, 24, 0.06), 0 6px 18px -10px rgba(16, 16, 24, 0.18);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --md-sys-color-primary: #006876;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #a0efff;
+  --md-sys-color-on-primary-container: #004e59;
+  --md-sys-color-secondary: #4a6267;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #cde7ed;
+  --md-sys-color-on-secondary-container: #334b4f;
+  --md-sys-color-tertiary: #815500;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffddb2;
+  --md-sys-color-on-tertiary-container: #291800;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #93000a;
+  --md-sys-color-surface: #f5fafc;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #eff5f6;
+  --md-sys-color-surface-container: #e9eff0;
+  --md-sys-color-surface-container-high: #e3e9eb;
+  --md-sys-color-surface-container-highest: #dee3e5;
+  --md-sys-color-on-surface: #171d1e;
+  --md-sys-color-on-surface-variant: #3f484a;
+  --md-sys-color-outline: #6f797b;
+  --md-sys-color-outline-variant: #bfc8ca;
+  --md-sys-color-inverse-surface: #2b3133;
+  --md-sys-color-inverse-on-surface: #ecf2f3;
+  --md-sys-color-inverse-primary: #82d3e3;
+  --md-sys-color-success: #2e6b30;
+  /* List rows / cards: white sheets on the tinted page in light mode. */
+  --md-row: var(--md-sys-color-surface-container-lowest);
+
+  /* Shape scale */
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Motion */
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* State-layer opacities */
+  --md-state-hover: 8%;
+  --md-state-press: 10%;
+
+  /* Elevation, only for floating things (shelf, snackbar, viewer image). */
+  --md-elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+
+  /* Older names, kept so every page reads from the M3 roles. */
+  --bg: var(--md-sys-color-surface);
+  --panel: var(--md-row);
+  --fg: var(--md-sys-color-on-surface);
+  --muted: var(--md-sys-color-on-surface-variant);
+  --line: var(--md-sys-color-outline-variant);
+  --line-strong: var(--md-sys-color-outline);
+  --hover: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), transparent);
+  --accent: var(--md-sys-color-primary);
+  --accent-fg: var(--md-sys-color-on-primary);
+  --accent-soft: var(--md-sys-color-secondary-container);
+  --accent-text: var(--md-sys-color-primary);
+  --ok: var(--md-sys-color-success);
+  --warn: var(--md-sys-color-tertiary);
+  --danger: var(--md-sys-color-error);
+  --field: var(--md-row);
+  --ease-out: var(--md-sys-motion-easing-emphasized-decelerate);
+
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Roboto Flex", Roboto, sans-serif;
   font-size: 14px;
+  line-height: 20px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -30,48 +87,74 @@
    no data-theme follows the OS. Dark tokens live in two selector blocks; keep them identical. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141416;
-    --panel: #1d1d21;
-    --fg: #ececf0;
-    --muted: #a3a3ad;
-    --line: #2b2b31;
-    --line-strong: #3a3a42;
-    --hover: rgba(255, 255, 255, 0.05);
-    --accent: #4f83ff;
-    --accent-fg: #0b1220;
-    --accent-soft: rgba(79, 131, 255, 0.14);
-    --accent-text: #8fb1ff;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --danger: #f87171;
-    --key-bg: #26262c;
-    --key-edge: #3d3d46;
-    --field: #17171a;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
+    --md-sys-color-primary: #82d3e3;
+    --md-sys-color-on-primary: #00363e;
+    --md-sys-color-primary-container: #004e59;
+    --md-sys-color-on-primary-container: #a0efff;
+    --md-sys-color-secondary: #b1cbd1;
+    --md-sys-color-on-secondary: #1c3439;
+    --md-sys-color-secondary-container: #334b4f;
+    --md-sys-color-on-secondary-container: #cde7ed;
+    --md-sys-color-tertiary: #ffb94d;
+    --md-sys-color-on-tertiary: #442b00;
+    --md-sys-color-tertiary-container: #624000;
+    --md-sys-color-on-tertiary-container: #ffddb2;
+    --md-sys-color-error: #ffb4ab;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000a;
+    --md-sys-color-on-error-container: #ffdad6;
+    --md-sys-color-surface: #0e1416;
+    --md-sys-color-surface-container-lowest: #090f10;
+    --md-sys-color-surface-container-low: #171d1e;
+    --md-sys-color-surface-container: #1b2122;
+    --md-sys-color-surface-container-high: #252b2c;
+    --md-sys-color-surface-container-highest: #303637;
+    --md-sys-color-on-surface: #dee3e5;
+    --md-sys-color-on-surface-variant: #bfc8ca;
+    --md-sys-color-outline: #899295;
+    --md-sys-color-outline-variant: #3f484a;
+    --md-sys-color-inverse-surface: #dee3e5;
+    --md-sys-color-inverse-on-surface: #2b3133;
+    --md-sys-color-inverse-primary: #006876;
+    --md-sys-color-success: #94d78f;
+    --md-row: var(--md-sys-color-surface-container);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #141416;
-  --panel: #1d1d21;
-  --fg: #ececf0;
-  --muted: #a3a3ad;
-  --line: #2b2b31;
-  --line-strong: #3a3a42;
-  --hover: rgba(255, 255, 255, 0.05);
-  --accent: #4f83ff;
-  --accent-fg: #0b1220;
-  --accent-soft: rgba(79, 131, 255, 0.14);
-  --accent-text: #8fb1ff;
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --danger: #f87171;
-  --key-bg: #26262c;
-  --key-edge: #3d3d46;
-  --field: #17171a;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
+  --md-sys-color-primary: #82d3e3;
+  --md-sys-color-on-primary: #00363e;
+  --md-sys-color-primary-container: #004e59;
+  --md-sys-color-on-primary-container: #a0efff;
+  --md-sys-color-secondary: #b1cbd1;
+  --md-sys-color-on-secondary: #1c3439;
+  --md-sys-color-secondary-container: #334b4f;
+  --md-sys-color-on-secondary-container: #cde7ed;
+  --md-sys-color-tertiary: #ffb94d;
+  --md-sys-color-on-tertiary: #442b00;
+  --md-sys-color-tertiary-container: #624000;
+  --md-sys-color-on-tertiary-container: #ffddb2;
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+  --md-sys-color-surface: #0e1416;
+  --md-sys-color-surface-container-lowest: #090f10;
+  --md-sys-color-surface-container-low: #171d1e;
+  --md-sys-color-surface-container: #1b2122;
+  --md-sys-color-surface-container-high: #252b2c;
+  --md-sys-color-surface-container-highest: #303637;
+  --md-sys-color-on-surface: #dee3e5;
+  --md-sys-color-on-surface-variant: #bfc8ca;
+  --md-sys-color-outline: #899295;
+  --md-sys-color-outline-variant: #3f484a;
+  --md-sys-color-inverse-surface: #dee3e5;
+  --md-sys-color-inverse-on-surface: #2b3133;
+  --md-sys-color-inverse-primary: #006876;
+  --md-sys-color-success: #94d78f;
+  --md-row: var(--md-sys-color-surface-container);
 }
 
 [hidden] {
@@ -80,18 +163,39 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
 
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* M3 focus indicator: 3 px, outside the component. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--md-sys-color-secondary);
   outline-offset: 2px;
+}
+
+/* Scrollbars that sit back. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

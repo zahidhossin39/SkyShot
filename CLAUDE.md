@@ -48,5 +48,5 @@ Before each run:
 - Dev server port is 1430, not Tauri's default 1420: the owner's Silent Voice project also uses 1420, and both bound it (IPv4 vs IPv6) so pages loaded from the wrong app.
 - Settings and History share `src/theme.css` tokens (light + dark).
 - Dev testing: `screenshot-app.exe --capture | --text | --close` drives the running instance (stop the installed copy first: they share one instance). Logs: `crate::log!` prints and appends to `%APPDATA%\com.zaid-hossain.screenshot-app\logs\shutter.log` (Settings → General → Show logs), so the owner's machine has timings and errors too.
-- Dev profile: deps opt-level 3, own crate opt-level 1 (generic image code was ~20x slower unoptimized). Icon changes need `build.rs` touched to re-embed.
+- Dev profile: deps opt-level 3, own crate opt-level 1 (generic image code was ~20x slower unoptimized). `build.rs` emits `cargo:rerun-if-changed=icons`; regenerate app icons from `src-tauri/icons/app-icon.png` with `npm run tauri icon src-tauri/icons/app-icon.png` (`src-tauri/icons/tray.png` is separate).
 - PowerShell 5.1: `Set-Content -Encoding utf8` writes a BOM (breaks serde); commit messages with quotes need `git commit -F file`.

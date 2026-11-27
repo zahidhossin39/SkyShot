@@ -2,93 +2,98 @@
 
 body {
   display: grid;
-  grid-template-columns: 216px 1fr;
+  grid-template-columns: 232px 1fr;
   height: 100vh;
   overflow: hidden;
 }
 
-/* ---------------------------------------------------------------- rail */
+/* ---------------------------------------------------------------- navigation drawer */
 
 .rail {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 18px 12px 14px;
-  border-right: 1px solid var(--line);
+  gap: 16px;
+  padding: 20px 12px 16px;
+  background: var(--md-sys-color-surface-container-low);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 8px 4px;
+  gap: 12px;
+  padding: 0 12px 8px;
 }
 
 .mark {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   flex: none;
+  border-radius: var(--md-sys-shape-corner-medium);
 }
 
+/* title-medium */
 .brand strong {
   display: block;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 24px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
+/* body-small */
 .brand span {
   display: block;
   font-size: 12px;
-  color: var(--muted);
+  line-height: 16px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
+/* Drawer item: full pill, active indicator in secondary-container. */
 nav button {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  height: 36px;
-  padding: 0 10px;
+  gap: 12px;
+  height: 44px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--md-sys-shape-corner-full);
   background: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms;
+  transition: background-color 150ms var(--md-sys-motion-easing-standard), color 150ms;
 }
 
 nav button:hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), transparent);
+  color: var(--md-sys-color-on-surface);
+}
+
+nav button:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-press), transparent);
 }
 
 nav button[aria-current="page"] {
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
   font-weight: 600;
 }
 
-/* Windows-style pill marker on the current page. */
-nav button[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--accent);
+nav button[aria-current="page"]:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-hover), var(--md-sys-color-secondary-container));
 }
 
 nav svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex: none;
   fill: none;
   stroke: currentColor;
@@ -97,59 +102,64 @@ nav svg {
   stroke-linejoin: round;
 }
 
-nav button[aria-current="page"] svg {
-  color: var(--accent);
-}
-
 .rail-foot {
   margin: auto 0 0;
-  padding: 0 10px;
+  padding: 0 16px;
   font-size: 12px;
-  color: var(--muted);
+  line-height: 16px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* ---------------------------------------------------------------- page */
 
 main {
   overflow-y: auto;
-  padding: 26px 32px 32px;
+  padding: 28px 36px 40px;
 }
 
 .page {
-  max-width: 600px;
-  animation: enter 220ms var(--ease-out);
+  max-width: 620px;
+  animation: enter 300ms var(--md-sys-motion-easing-emphasized-decelerate);
 }
 
 .page header {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
+/* headline-small */
 h1 {
   margin: 0;
   font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
+/* body-medium */
 .page header p {
   margin: 6px 0 0;
   max-width: 60ch;
-  color: var(--muted);
-  line-height: 1.45;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
+/* List subheader: title-small in primary. */
 h2 {
-  margin: 30px 0 10px;
-  font-size: 15px;
+  margin: 32px 0 12px;
+  padding-left: 4px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
+  color: var(--md-sys-color-primary);
 }
 
-/* One surface per group, rows split by hairlines (Windows 11 settings pattern). */
+/* A segmented list: rows are separate sheets, 2 px apart, with the outer corners rounded. */
 .group {
-  background: var(--panel);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--md-sys-shape-corner-large);
+  overflow: hidden;
 }
 
 .row {
@@ -157,22 +167,37 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 44px;
-  padding: 12px 16px;
+  min-height: 56px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background: var(--md-row);
+  border-radius: var(--md-sys-shape-corner-extra-small);
 }
 
-.row + .row {
-  border-top: 1px solid var(--line);
+.row:first-child {
+  border-top-left-radius: var(--md-sys-shape-corner-large);
+  border-top-right-radius: var(--md-sys-shape-corner-large);
+}
+
+.row:last-child {
+  border-bottom-left-radius: var(--md-sys-shape-corner-large);
+  border-bottom-right-radius: var(--md-sys-shape-corner-large);
 }
 
 .row.stack {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px 16px 16px;
 }
 
 label.row {
   cursor: pointer;
+  transition: background-color 150ms;
+}
+
+label.row:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 4%, var(--md-row));
 }
 
 .row-text {
@@ -186,15 +211,16 @@ label.row {
   flex: 1;
 }
 
+/* body-large-ish list headline */
 .label {
   font-weight: 500;
 }
 
 .hint,
 .path {
-  font-size: 12.5px;
-  color: var(--muted);
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .path {
@@ -202,97 +228,211 @@ label.row {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
 }
 
 .status {
-  font-size: 12.5px;
-  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .status.ok::before,
 .status.bad::before {
   content: "";
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: 1px;
 }
 
 .status.ok::before {
-  background: var(--ok);
+  background: var(--md-sys-color-success);
 }
 
 .status.bad {
-  color: var(--warn);
+  color: var(--md-sys-color-tertiary);
 }
 
 .status.bad::before {
-  background: var(--warn);
+  background: var(--md-sys-color-tertiary);
 }
 
-/* ---------------------------------------------------------------- controls */
+/* ---------------------------------------------------------------- buttons */
 
 .btns {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex: none;
 }
 
-.btn,
-select {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--panel);
+/* Tonal button by default; .primary is the filled button. */
+.btn {
+  position: relative;
+  height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
-  transition: border-color 120ms, background-color 120ms;
+  transition: background-color 150ms var(--md-sys-motion-easing-standard), box-shadow 150ms;
 }
 
-.btn:hover,
-select:hover {
-  background: var(--hover);
+.btn:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-hover), var(--md-sys-color-secondary-container));
+}
+
+.btn:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-press), var(--md-sys-color-secondary-container));
 }
 
 .btn.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
 }
 
 .btn.primary:hover {
-  filter: brightness(1.08);
+  background: color-mix(in srgb, var(--md-sys-color-on-primary) var(--md-state-hover), var(--md-sys-color-primary));
 }
 
-select {
-  padding-right: 8px;
-  min-width: 140px;
+.btn.primary:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-primary) var(--md-state-press), var(--md-sys-color-primary));
 }
+
+.btn:disabled {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  cursor: default;
+}
+
+/* Text button */
+button.link {
+  margin-top: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: none;
+  color: var(--md-sys-color-primary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+button.link:hover {
+  background: color-mix(in srgb, var(--md-sys-color-primary) var(--md-state-hover), transparent);
+}
+
+button.link:active {
+  background: color-mix(in srgb, var(--md-sys-color-primary) var(--md-state-press), transparent);
+}
+
+button.link.danger {
+  color: var(--md-sys-color-error);
+}
+
+button.link.danger:hover {
+  background: color-mix(in srgb, var(--md-sys-color-error) var(--md-state-hover), transparent);
+}
+
+button.link.danger:active {
+  background: color-mix(in srgb, var(--md-sys-color-error) var(--md-state-press), transparent);
+}
+
+/* ---------------------------------------------------------------- fields */
+
+/* Outlined select, M3 small corner. */
+select {
+  height: 40px;
+  min-width: 156px;
+  padding: 0 36px 0 14px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-row)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23899295'/%3E%3C/svg%3E")
+    no-repeat right 8px center / 22px;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 150ms;
+}
+
+select:hover {
+  border-color: var(--md-sys-color-on-surface);
+}
+
+select:focus-visible {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+}
+
+select option {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+
+.keyfield {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+input[type="password"] {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-row);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  transition: border-color 150ms;
+}
+
+input[type="password"]:hover {
+  border-color: var(--md-sys-color-on-surface);
+}
+
+input[type="password"]::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+input[type="password"]:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+}
+
+/* ---------------------------------------------------------------- shortcuts */
 
 /* Shortcut buttons look like the keys you press. */
 button.hotkey {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 9px;
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
   background: none;
   cursor: pointer;
-  transition: border-color 120ms, background-color 120ms;
+  transition: background-color 150ms;
 }
 
 button.hotkey:hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), transparent);
 }
 
 button.hotkey .plus {
-  color: var(--muted);
+  color: var(--md-sys-color-on-surface-variant);
   font-size: 12px;
 }
 
@@ -300,144 +440,159 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 24px;
-  padding: 0 7px;
-  border: 1px solid var(--key-edge);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  background: var(--key-bg);
-  font: 600 12px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  min-width: 24px;
+  height: 26px;
+  padding: 0 8px;
   box-sizing: border-box;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font: 600 12px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif;
 }
 
 button.hotkey.recording {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  padding: 4px 16px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
   font-weight: 600;
-  padding: 4px 12px;
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.keyfield {
-  display: flex;
-  gap: 8px;
-}
+/* ---------------------------------------------------------------- switch (M3) */
 
-input[type="password"] {
-  flex: 1;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--field);
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12.5px;
-}
-
-input[type="password"]::placeholder {
-  color: var(--muted);
-  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  font-size: 13px;
-}
-
-input[type="password"]:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* Toggle switch (Windows style) on a real checkbox. */
 .switch {
   appearance: none;
   position: relative;
   flex: none;
-  width: 40px;
-  height: 20px;
+  width: 52px;
+  height: 32px;
   margin: 0;
-  border: 1px solid var(--muted);
-  border-radius: 999px;
-  background: transparent;
+  box-sizing: border-box;
+  border: 2px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
   cursor: pointer;
-  transition: background-color 160ms, border-color 160ms;
+  transition: background-color 200ms var(--md-sys-motion-easing-standard), border-color 200ms;
 }
 
 .switch::after {
   content: "";
   position: absolute;
-  top: 3px;
-  left: 4px;
-  width: 12px;
-  height: 12px;
+  top: 50%;
+  left: 6px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--muted);
-  transition: transform 180ms var(--ease-out), background-color 160ms;
+  background: var(--md-sys-color-outline);
+  transform: translateY(-50%);
+  transition:
+    left 250ms var(--md-sys-motion-easing-emphasized),
+    width 250ms var(--md-sys-motion-easing-emphasized),
+    height 250ms var(--md-sys-motion-easing-emphasized),
+    background-color 200ms;
+}
+
+.switch:hover::after {
+  background: var(--md-sys-color-on-surface-variant);
+}
+
+.switch:active::after {
+  width: 28px;
+  height: 28px;
+  left: 0;
 }
 
 .switch:checked {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary);
 }
 
 .switch:checked::after {
-  background: var(--accent-fg);
-  transform: translateX(19px);
+  left: 22px;
+  width: 24px;
+  height: 24px;
+  background: var(--md-sys-color-on-primary);
 }
 
-/* Segmented control (System / Light / Dark). */
+.switch:checked:hover::after {
+  background: var(--md-sys-color-primary-container);
+}
+
+.switch:checked:active::after {
+  left: 20px;
+  width: 28px;
+  height: 28px;
+}
+
+/* ---------------------------------------------------------------- segmented button (M3) */
+
 .seg {
   display: inline-flex;
   flex: none;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--field);
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  overflow: hidden;
 }
 
 .seg button {
-  height: 26px;
-  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 14px;
   border: 0;
-  border-radius: 6px;
   background: none;
-  color: var(--muted);
+  color: var(--md-sys-color-on-surface);
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 120ms, color 120ms;
+  transition: background-color 150ms;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--md-sys-color-outline);
 }
 
 .seg button:hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-hover), transparent);
+}
+
+.seg button:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) var(--md-state-press), transparent);
+}
+
+.seg button:focus-visible {
+  outline-offset: -3px;
 }
 
 .seg button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 600;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
 }
 
-button.link {
-  margin-top: 10px;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--accent-text);
-  font-size: 13px;
-  cursor: pointer;
+.seg button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-hover), var(--md-sys-color-secondary-container));
 }
 
-button.link:hover {
-  text-decoration: underline;
+.seg button[aria-pressed="true"]:active {
+  background: color-mix(in srgb, var(--md-sys-color-on-secondary-container) var(--md-state-press), var(--md-sys-color-secondary-container));
 }
 
-button.link.danger {
-  color: var(--danger);
+/* Check mark on the selected segment. */
+.seg button[aria-pressed="true"]::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .error {
-  margin: 10px 0 0;
-  color: var(--danger);
+  margin: 10px 4px 0;
+  color: var(--md-sys-color-error);
   font-size: 13px;
 }
 
@@ -446,17 +601,21 @@ button.link.danger {
 .keys {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px 20px;
+  gap: 2px;
   margin: 0;
+  border-radius: var(--md-sys-shape-corner-large);
+  overflow: hidden;
 }
 
 .keys div {
   display: grid;
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 88px 1fr;
   align-items: center;
   gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
+  min-height: 44px;
+  padding: 6px 14px;
+  box-sizing: border-box;
+  background: var(--md-row);
 }
 
 .keys dt {
@@ -467,7 +626,8 @@ button.link.danger {
 .keys dd {
   margin: 0;
   font-size: 13px;
-  color: var(--muted);
+  line-height: 18px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* ---------------------------------------------------------------- motion */
@@ -475,13 +635,13 @@ button.link.danger {
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
 }
 
 @keyframes pulse {
   50% {
-    box-shadow: 0 0 0 4px var(--accent-soft);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--md-sys-color-primary) 22%, transparent);
   }
 }
 
