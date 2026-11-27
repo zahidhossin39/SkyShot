@@ -46,6 +46,28 @@ function inkPath(pts: InkPoint[], size: number, pen: boolean): Path2D {
   return path;
 }
 
+// Brightness under a highlight, cached per rect position: notes redraw on every mouse move.
+const darkCache = new WeakMap<Rect, { key: string; dark: boolean }>();
+function darkUnder(c: CanvasRenderingContext2D, r: Rect): boolean {
+  const key = `${r.x},${r.y},${r.w},${r.h}`;
+  const hit = darkCache.get(r);
+  if (hit?.key === key) return hit.dark;
+  const x = Math.max(0, Math.round(Math.min(r.x, r.x + r.w)));
+  const y = Math.max(0, Math.round(Math.min(r.y, r.y + r.h)));
+  const w = Math.min(c.canvas.width - x, Math.round(Math.abs(r.w)));
+  const h = Math.min(c.canvas.height - y, Math.round(Math.abs(r.h)));
+  let dark = false;
+  if (w > 0 && h > 0) {
+    const px = c.getImageData(x, y, w, h).data;
+    const stride = Math.max(1, Math.floor(px.length / 4 / 2000)) * 4; // ~2000 samples is plenty
+    let sum = 0, n = 0;
+    for (let i = 0; i < px.length; i += stride, n++) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    dark = sum / n < 110;
+  }
+  darkCache.set(r, { key, dark });
+  return dark;
+}
+
 /** Draws one note. `step` is its number among step badges (they renumber on delete). */
 export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: number) {
   c.save();
@@ -61,8 +83,15 @@ export function drawNote(c: CanvasRenderingContext2D, n: Note, s: number, step: 
       break;
     case "mark":
       c.shadowColor = "transparent";
-      c.globalCompositeOperation = "multiply"; // like a real highlighter: text stays crisp
-      c.globalAlpha = 0.45;
+      // Multiply is a real highlighter on light pages, but on dark ones it only tints the text.
+      // There, screen lifts the background toward the colour and white text stays white.
+      if (darkUnder(c, n.r)) {
+        c.globalCompositeOperation = "screen";
+        c.globalAlpha = 0.6;
+      } else {
+        c.globalCompositeOperation = "multiply";
+        c.globalAlpha = 0.45;
+      }
       c.fillRect(n.r.x, n.r.y, n.r.w, n.r.h);
       break;
     case "arrow": {
