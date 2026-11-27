@@ -1,16 +1,16 @@
 #!/bin/sh
 # Install (or update) Sky Shot on macOS or Linux:
 #
-#   curl -fsSL https://raw.githubusercontent.com/zahidhossin39/sky-shot/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/zahidhossin39/SkyShot/main/install.sh | sh
 #
 # macOS: the universal app into /Applications.
 # Linux: .deb on Debian/Ubuntu/Mint/Pop, .rpm on Fedora/RHEL/openSUSE, otherwise the
 # self-updating AppImage in ~/.local/bin (Arch, immutable distros, everything else).
 # Set SKYSHOT_FORMAT=appimage|deb|rpm to choose yourself. On Linux the package and command are
-# `sky-shot`. Sky Shot used to be called Shutter; an old copy is replaced.
+# `skyshot`. Sky Shot used to be called Shutter; an old copy is replaced.
 set -eu
 
-REPO="zahidhossin39/sky-shot"
+REPO="zahidhossin39/SkyShot"
 say() { printf '%s\n' "$*"; }
 fail() { say "Sky Shot install: $*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -56,14 +56,14 @@ install_appimage() {
   chmod +x "$tmp/SkyShot.AppImage"
   mv -f "$tmp/SkyShot.AppImage" "$bin/SkyShot.AppImage"
   # The old name (Shutter) and its menu entry.
-  rm -f "$bin/Shutter.AppImage" "$bin/shutter-app" "$HOME/.local/share/applications/shutter.desktop"
+  rm -f "$bin/Shutter.AppImage" "$bin/shutter-app" "$bin/sky-shot" "$HOME/.local/share/applications/shutter.desktop" "$HOME/.local/share/applications/sky-shot.desktop"
   exec_line="$bin/SkyShot.AppImage"
   # AppImages mount with FUSE 2, which newer Ubuntu doesn't ship; run unpacked instead.
   if ! ldconfig -p 2>/dev/null | grep -q 'libfuse\.so\.2'; then
     exec_line="env APPIMAGE_EXTRACT_AND_RUN=1 $exec_line"
     say "Note: FUSE 2 not found, so Sky Shot runs unpacked (a little slower to start)."
   fi
-  cat >"$HOME/.local/share/applications/sky-shot.desktop" <<EOF
+  cat >"$HOME/.local/share/applications/skyshot.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Sky Shot
@@ -72,7 +72,7 @@ Exec=$exec_line
 Categories=Utility;Graphics;
 Terminal=false
 EOF
-  ln -sf "$bin/SkyShot.AppImage" "$bin/sky-shot"
+  ln -sf "$bin/SkyShot.AppImage" "$bin/skyshot"
   say "Installed $bin/SkyShot.AppImage (updates itself from Settings)"
 }
 
@@ -88,19 +88,19 @@ install_linux() {
   fi
   case "$format" in
     deb)
-      fetch "$(pick '_amd64\.deb$')" "$tmp/sky-shot.deb"
-      as_root apt-get install -y "$tmp/sky-shot.deb" ;;
+      fetch "$(pick '_amd64\.deb$')" "$tmp/skyshot.deb"
+      as_root apt-get install -y "$tmp/skyshot.deb" ;;
     rpm)
-      fetch "$(pick '\.x86_64\.rpm$')" "$tmp/sky-shot.rpm"
-      if have dnf; then as_root dnf install -y "$tmp/sky-shot.rpm"
-      else as_root zypper --non-interactive install --allow-unsigned-rpm "$tmp/sky-shot.rpm"; fi ;;
+      fetch "$(pick '\.x86_64\.rpm$')" "$tmp/skyshot.rpm"
+      if have dnf; then as_root dnf install -y "$tmp/skyshot.rpm"
+      else as_root zypper --non-interactive install --allow-unsigned-rpm "$tmp/skyshot.rpm"; fi ;;
     appimage) install_appimage ;;
     *) fail "unknown SKYSHOT_FORMAT '$format' (use appimage, deb or rpm)" ;;
   esac
   say "Done. Open Sky Shot from your app menu."
   if [ -n "${WAYLAND_DISPLAY:-}" ]; then
     say "Wayland: apps can't grab global hotkeys there. Add a shortcut in your desktop's"
-    say "keyboard settings that runs:  sky-shot --capture"
+    say "keyboard settings that runs:  skyshot --capture"
   fi
 }
 

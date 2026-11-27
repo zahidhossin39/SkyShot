@@ -1,11 +1,11 @@
 {
-  "mainBinaryName": "sky-shot",
+  "mainBinaryName": "skyshot",
   "bundle": {
     "targets": ["appimage", "deb", "rpm"],
     "resources": { "ocr-models/": "ocr-models/" },
     "linux": {
-      "deb": { "conflicts": ["shutter-app"], "replaces": ["shutter-app"] },
-      "rpm": { "conflicts": ["shutter-app"], "obsoletes": ["shutter-app"] }
+      "deb": { "conflicts": ["shutter-app","sky-shot"], "replaces": ["shutter-app","sky-shot"] },
+      "rpm": { "conflicts": ["shutter-app","sky-shot"], "obsoletes": ["shutter-app","sky-shot"] }
     }
   }
 }

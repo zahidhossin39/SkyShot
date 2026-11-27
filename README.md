@@ -8,17 +8,17 @@ A fast screenshot tool for Windows, macOS and Linux, built with Tauri 2 (Rust co
 
 | System | One command |
 |---|---|
-| **Windows 10/11** | Download `Sky.Shot_x.y.z_x64-setup.exe` from [Releases](https://github.com/zahidhossin39/sky-shot/releases/latest) and run it |
-| **macOS 10.15+** (Apple Silicon and Intel) | `brew install --cask zahidhossin39/tap/sky-shot` |
-| **macOS or Linux** | `curl -fsSL https://raw.githubusercontent.com/zahidhossin39/sky-shot/main/install.sh \| sh` |
+| **Windows 10/11** | Download `Sky.Shot_x.y.z_x64-setup.exe` from [Releases](https://github.com/zahidhossin39/SkyShot/releases/latest) and run it |
+| **macOS 10.15+** (Apple Silicon and Intel) | `brew install --cask zahidhossin39/tap/skyshot` |
+| **macOS or Linux** | `curl -fsSL https://raw.githubusercontent.com/zahidhossin39/SkyShot/main/install.sh \| sh` |
 
-The script picks the right package: `.deb` on Debian, Ubuntu, Mint and Pop!_OS; `.rpm` on Fedora and openSUSE; the self-updating AppImage everywhere else (Arch, immutable distros). Files are also on the [Releases](https://github.com/zahidhossin39/sky-shot/releases/latest) page.
+The script picks the right package: `.deb` on Debian, Ubuntu, Mint and Pop!_OS; `.rpm` on Fedora and openSUSE; the self-updating AppImage everywhere else (Arch, immutable distros). Files are also on the [Releases](https://github.com/zahidhossin39/SkyShot/releases/latest) page.
 
 Sky Shot updates itself on Windows, macOS and the AppImage (Settings → Check for updates). `.deb`/`.rpm` installs: run the script again.
 
 **macOS:** the first capture asks for Screen Recording permission (System Settings → Privacy & Security). Sky Shot isn't notarized yet: if you open the `.dmg` by hand, macOS blocks it once; go to Privacy & Security and click **Open Anyway**. Brew and the script skip that step.
 
-**Linux:** the command is `sky-shot`. On Wayland, apps can't register global hotkeys: add a shortcut in your desktop's keyboard settings that runs `sky-shot --capture`. GNOME asks once whether Sky Shot may take screenshots. The tray icon on GNOME needs the AppIndicator extension.
+**Linux:** the command is `skyshot`. On Wayland, apps can't register global hotkeys: add a shortcut in your desktop's keyboard settings that runs `skyshot --capture`. GNOME asks once whether Sky Shot may take screenshots. The tray icon on GNOME needs the AppIndicator extension.
 
 ## Features
 

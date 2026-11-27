@@ -16,7 +16,7 @@ pub struct Available {
 }
 
 /// Where a manual update comes from.
-pub const RELEASES: &str = "https://github.com/zahidhossin39/sky-shot/releases/latest";
+pub const RELEASES: &str = "https://github.com/zahidhossin39/SkyShot/releases/latest";
 
 /// On Linux only the AppImage can replace itself; .deb/.rpm installs belong to the package
 /// manager, and overwriting them would fight it.

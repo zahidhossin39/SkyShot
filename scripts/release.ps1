@@ -22,7 +22,7 @@ param(
   [switch]$Resume   # the tag is already pushed (an earlier run stopped): wait, check, publish
 )
 $ErrorActionPreference = 'Stop'
-$Repo = 'zahidhossin39/sky-shot'
+$Repo = 'zahidhossin39/SkyShot'
 $Tag = "v$Version"
 $Root = Split-Path $PSScriptRoot -Parent
 Set-Location $Root
@@ -109,7 +109,7 @@ $served = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/l
 if ($served.version -ne $Version) { throw "latest.json is serving $($served.version), not $Version" }
 Write-Host "released ${Tag}: https://github.com/$Repo/releases/tag/$Tag"
 
-# --- Homebrew: `brew install --cask zahidhossin39/tap/sky-shot` reads Casks/sky-shot.rb in our tap
+# --- Homebrew: `brew install --cask zahidhossin39/tap/skyshot` reads Casks/skyshot.rb in our tap
 $Tap = 'zahidhossin39/homebrew-tap'
 Run "gh release download $Tag --repo $Repo --pattern *.dmg --dir `"$tmp`" --clobber"
 $dmg = Get-ChildItem $tmp -Filter *.dmg | Select-Object -First 1
@@ -117,7 +117,7 @@ if (-not $dmg) { throw 'no .dmg in the release' }
 $sha = (Get-FileHash $dmg.FullName -Algorithm SHA256).Hash.ToLower()
 $dmgName = $dmg.Name -replace [regex]::Escape($Version), '#{version}'
 $cask = @"
-cask "sky-shot" do
+cask "skyshot" do
   version "$Version"
   sha256 "$sha"
 
@@ -145,10 +145,10 @@ end
 "@
 cmd /c "gh repo view $Tap >nul 2>nul"
 if ($LASTEXITCODE) { Run "gh repo create $Tap --public --description `"Homebrew tap for Sky Shot`"" }
-$existing = cmd /c "gh api repos/$Tap/contents/Casks/sky-shot.rb -q .sha 2>nul"
-$body = @{ message = "sky-shot $Version"; content = [Convert]::ToBase64String($Utf8.GetBytes($cask)) }
+$existing = cmd /c "gh api repos/$Tap/contents/Casks/skyshot.rb -q .sha 2>nul"
+$body = @{ message = "skyshot $Version"; content = [Convert]::ToBase64String($Utf8.GetBytes($cask)) }
 if ($existing) { $body.sha = "$existing".Trim() }
 $bodyPath = Join-Path $tmp 'cask.json'
 [IO.File]::WriteAllText($bodyPath, ($body | ConvertTo-Json), $Utf8)
-Run "gh api -X PUT repos/$Tap/contents/Casks/sky-shot.rb --input `"$bodyPath`" --silent"
-Write-Host "Homebrew cask updated: brew install --cask zahidhossin39/tap/sky-shot"
+Run "gh api -X PUT repos/$Tap/contents/Casks/skyshot.rb --input `"$bodyPath`" --silent"
+Write-Host "Homebrew cask updated: brew install --cask zahidhossin39/tap/skyshot"

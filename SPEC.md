@@ -271,7 +271,7 @@ Goal: the same app on every Mac (Apple Silicon + Intel) and as many Linux distro
 - **Released v0.3.0 (2026-11-26)**: first release from CI. A draft's latest.json has API asset urls; release.ps1 rewrites them to /releases/download/<tag>/ links before publishing (`-Resume` continues a stopped run).
 
 ## Renamed to Sky Shot (2026-11-27, v0.4.0)
-Owner's call. Repo `zahidhossin39/sky-shot` (GitHub redirects `shutter` links, so old copies still find latest.json). productName "Sky Shot" everywhere; the app id `com.zaid-hossain.screenshot-app` stays, so settings, History and the saved AI key carry over. Internal names stay too (`shutter-theme` key, `shutter.log`, keyring "Shutter AI key", the signing key file).
+Owner's call. Repo `zahidhossin39/SkyShot` (GitHub redirects `shutter` links, so old copies still find latest.json). productName "Sky Shot" everywhere; the app id `com.zaid-hossain.screenshot-app` stays, so settings, History and the saved AI key carry over. Internal names stay too (`shutter-theme` key, `shutter.log`, keyring "Shutter AI key", the signing key file).
 - Windows: NSIS keys installs by product name, so an update would install Sky Shot next to Shutter. `src-tauri/windows/hooks.nsh` (post-install) deletes the old program folder, shortcuts and Installed-apps entry, and moves the "start with Windows" value to the new name.
-- Linux: package and command `sky-shot`; the deb/rpm replace/obsolete `shutter-app`. The `shutter-app` naming workaround is gone.
-- macOS: `Sky Shot.app`. The in-app updater replaces the bundle in place, so an updated copy keeps the folder name Shutter.app; install.sh and the new `sky-shot` cask install `Sky Shot.app` and remove an old Shutter.app.
+- Linux: package and command `skyshot`; the deb/rpm replace/obsolete `shutter-app`. The `shutter-app` naming workaround is gone.
+- macOS: `Sky Shot.app`. The in-app updater replaces the bundle in place, so an updated copy keeps the folder name Shutter.app; install.sh and the new `skyshot` cask install `Sky Shot.app` and remove an old Shutter.app.
