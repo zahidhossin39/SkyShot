@@ -153,4 +153,4 @@ See [SPEC.md](SPEC.md) for architecture & design decisions, [CONTRIBUTING.md](CO
 
 ## License
 
-[MIT License](LICENSE) — Copyright (c) 2026 Zaid Hossain
+[MIT License](LICENSE) — Copyright (c) 2026 Zaid Hossain (ZaidHossain.Com)
