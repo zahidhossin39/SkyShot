@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an improvement or new capability for Sky Shot.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make Sky Shot better? Please check [`SPEC.md`](https://github.com/zahidhossin39/SkyShot/blob/main/SPEC.md) first (especially §10 "Not doing") to see existing design decisions and scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: What workflow is missing or frustrating today?
+      placeholder: I'm often trying to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe how you envision this working in Sky Shot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any workarounds or alternative approaches you've tried or considered (optional).
+    validations:
+      required: false

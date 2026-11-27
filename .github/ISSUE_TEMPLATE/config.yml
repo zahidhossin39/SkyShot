@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Report
+    url: https://github.com/zahidhossin39/SkyShot/security/advisories/new
+    about: Report a security or privacy issue privately via GitHub Security Advisories (see SECURITY.md).
+  - name: Product Spec & Roadmap (SPEC.md)
+    url: https://github.com/zahidhossin39/SkyShot/blob/main/SPEC.md
+    about: Read product decisions, platform notes, and intentional non-goals before opening a request.

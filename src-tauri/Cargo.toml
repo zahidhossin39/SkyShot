@@ -2,7 +2,7 @@
 name = "screenshot-app"
 version = "1.0.8"
 description = "Screenshot tool with blur/redact and OCR"
-authors = ["Zaid Hossain"]
+authors = ["Masum Khan <TheMasum.Com>", "Zaid Hossain <ZaidHossain.Com>"]
 license = "MIT"
 edition = "2024"
 
