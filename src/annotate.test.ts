@@ -1,7 +1,7 @@
 // Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isTiny, moved, noteAt, noteBox, type Note } from "./annotate.ts";
+import { avgLuma, DARK_LUMA, isTiny, moved, noteAt, noteBox, type Note } from "./annotate.ts";
 
 // Text width = 10px per character, enough to test text boxes without a real canvas.
 const c = { font: "", measureText: (t: string) => ({ width: t.length * 10 }) } as unknown as CanvasRenderingContext2D;
@@ -42,4 +42,12 @@ test("moving and tiny checks", () => {
   assert.equal(isTiny(a, 1), false);
   assert.equal(isTiny(a, 2), true, "10px is too short at 200% scaling");
   assert.equal(isTiny({ kind: "mark", color: red, r: { x: 0, y: 0, w: 50, h: 2 } }, 1), true);
+});
+
+test("highlighter: dark-mode backgrounds count as dark, white pages as light", () => {
+  const fill = (r: number, g: number, b: number) => new Uint8ClampedArray(Array(64).fill([r, g, b, 255]).flat());
+  assert.ok(avgLuma(fill(0x0d, 0x11, 0x17)) < DARK_LUMA); // GitHub dark
+  assert.ok(avgLuma(fill(0x1e, 0x1e, 0x1e)) < DARK_LUMA); // VS Code dark
+  assert.ok(avgLuma(fill(255, 255, 255)) >= DARK_LUMA);
+  assert.ok(avgLuma(fill(0xf3, 0xf4, 0xf6)) >= DARK_LUMA); // light grey UI
 });

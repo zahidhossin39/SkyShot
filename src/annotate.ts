@@ -46,31 +46,37 @@ function inkPath(pts: InkPoint[], size: number, pen: boolean): Path2D {
   return path;
 }
 
-// Brightness under a highlight, cached per rect position: notes redraw on every mouse move.
-const darkCache = new WeakMap<Rect, { key: string; dark: boolean }>();
+/** Average brightness (0-255) of RGBA pixels. */
+export function avgLuma(px: Uint8ClampedArray) {
+  let sum = 0;
+  for (let i = 0; i < px.length; i += 4) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  return sum / (px.length / 4);
+}
+export const DARK_LUMA = 110;
+
+// Brightness under a highlight, cached per rect: notes redraw on every mouse move, and a
+// rect is never changed in place (dragging or moving makes a new one).
+const darkCache = new WeakMap<Rect, boolean>();
 let probeCtx: CanvasRenderingContext2D | undefined; // made on first use: node tests import this file
 const probeOf = () => (probeCtx ??= Object.assign(document.createElement("canvas"), { width: 32, height: 32 })
   .getContext("2d", { willReadFrequently: true })!);
 function darkUnder(c: CanvasRenderingContext2D, r: Rect): boolean {
-  const key = `${r.x},${r.y},${r.w},${r.h}`;
   const hit = darkCache.get(r);
-  if (hit?.key === key) return hit.dark;
+  if (hit !== undefined) return hit;
+  // Clamp both edges to the screen, so a mark hanging off it measures only what it covers.
   const x = Math.max(0, Math.round(Math.min(r.x, r.x + r.w)));
   const y = Math.max(0, Math.round(Math.min(r.y, r.y + r.h)));
-  const w = Math.min(c.canvas.width - x, Math.round(Math.abs(r.w)));
-  const h = Math.min(c.canvas.height - y, Math.round(Math.abs(r.h)));
+  const w = Math.min(c.canvas.width, Math.round(Math.max(r.x, r.x + r.w))) - x;
+  const h = Math.min(c.canvas.height, Math.round(Math.max(r.y, r.y + r.h))) - y;
   let dark = false;
   if (w > 0 && h > 0) {
     // Shrink to 32x32 first: reading the full area cost ~30 ms per move on a 4K-wide mark.
     const probe = probeOf();
     probe.clearRect(0, 0, 32, 32);
     probe.drawImage(c.canvas, x, y, w, h, 0, 0, 32, 32);
-    const px = probe.getImageData(0, 0, 32, 32).data;
-    let sum = 0;
-    for (let i = 0; i < px.length; i += 4) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-    dark = sum / (px.length / 4) < 110;
+    dark = avgLuma(probe.getImageData(0, 0, 32, 32).data) < DARK_LUMA;
   }
-  darkCache.set(r, { key, dark });
+  darkCache.set(r, dark);
   return dark;
 }
 
