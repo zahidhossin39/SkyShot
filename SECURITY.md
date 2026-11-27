@@ -31,7 +31,7 @@ Instead, report them privately using one of the following channels:
 
 1. **GitHub Security Advisories (Preferred)**: Open a private advisory at
    [https://github.com/zahidhossin39/SkyShot/security/advisories/new](https://github.com/zahidhossin39/SkyShot/security/advisories/new).
-2. **Direct Contact**: Reach out to project maintainer Masum Khan via [TheMasum.Com](https://themasum.com).
+2. **Direct Contact**: Reach out to project maintainer Zaid Hossain via [ZaidHossain.Com](https://zaidhossain.com).
 
 ### What to Include
 

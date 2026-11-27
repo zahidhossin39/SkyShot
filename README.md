@@ -144,13 +144,13 @@ See [SPEC.md](SPEC.md) for architecture & design decisions, [CONTRIBUTING.md](CO
 
 | Collaborator | Role & Contributions | Links |
 |---|---|---|
-| **Masum Khan** | Product ideation, naming, core feature design, UI/UX direction, visual creatives & brand logo, project rights & license holder | [TheMasum.Com](https://themasum.com) · [@8Masum](https://github.com/8Masum) |
-| **Zaid Hossain** | Core engineering & desktop architecture *(built with Claude)* | [ZaidHossain.Com](https://zaidhossain.com) · [@zahidhossin39](https://github.com/zahidhossin39) |
+| **Zaid Hossain** | Owner. Product ideation, core engineering & desktop architecture, project rights & license holder | [ZaidHossain.Com](https://zaidhossain.com) · [@zahidhossin39](https://github.com/zahidhossin39) |
+| **Masum Khan** | Naming, core feature design, UI/UX direction, visual creatives & brand logo | [TheMasum.Com](https://themasum.com) · [@8Masum](https://github.com/8Masum) |
 
-> **Ownership & Rights:** Project rights, copyright, and license are held by **Masum Khan ([TheMasum.Com](https://themasum.com))**, released under the MIT License.
+> **Ownership & Rights:** Project rights, copyright, and license are held by **Zaid Hossain ([ZaidHossain.Com](https://zaidhossain.com))**, released under the MIT License.
 
 ---
 
 ## License
 
-[MIT License](LICENSE) — Copyright (c) 2026 Masum Khan (TheMasum.Com)
+[MIT License](LICENSE) — Copyright (c) 2026 Zaid Hossain

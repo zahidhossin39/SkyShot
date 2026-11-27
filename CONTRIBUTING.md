@@ -1,6 +1,6 @@
 # Contributing to Sky Shot
 
-Thank you for your interest in contributing to **Sky Shot**! Sky Shot is an open-source, privacy-first screenshot, redaction, and offline OCR desktop app built with Tauri 2 (TypeScript UI + Rust core), licensed under the MIT License (copyright Masum Khan / [TheMasum.Com](https://themasum.com), built in collaboration with Zaid Hossain / [ZaidHossain.Com](https://zaidhossain.com)).
+Thank you for your interest in contributing to **Sky Shot**! Sky Shot is an open-source, privacy-first screenshot, redaction, and offline OCR desktop app built with Tauri 2 (TypeScript UI + Rust core), licensed under the MIT License (copyright Zaid Hossain / [ZaidHossain.Com](https://zaidhossain.com), built in collaboration with Masum Khan / [TheMasum.Com](https://themasum.com)).
 
 Before starting significant work, please read [`SPEC.md`](SPEC.md) — it is the single source of truth for product decisions, architecture, and intentional non-goals.
 
