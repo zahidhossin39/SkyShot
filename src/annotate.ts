@@ -48,6 +48,9 @@ function inkPath(pts: InkPoint[], size: number, pen: boolean): Path2D {
 
 // Brightness under a highlight, cached per rect position: notes redraw on every mouse move.
 const darkCache = new WeakMap<Rect, { key: string; dark: boolean }>();
+let probeCtx: CanvasRenderingContext2D | undefined; // made on first use: node tests import this file
+const probeOf = () => (probeCtx ??= Object.assign(document.createElement("canvas"), { width: 32, height: 32 })
+  .getContext("2d", { willReadFrequently: true })!);
 function darkUnder(c: CanvasRenderingContext2D, r: Rect): boolean {
   const key = `${r.x},${r.y},${r.w},${r.h}`;
   const hit = darkCache.get(r);
@@ -58,11 +61,14 @@ function darkUnder(c: CanvasRenderingContext2D, r: Rect): boolean {
   const h = Math.min(c.canvas.height - y, Math.round(Math.abs(r.h)));
   let dark = false;
   if (w > 0 && h > 0) {
-    const px = c.getImageData(x, y, w, h).data;
-    const stride = Math.max(1, Math.floor(px.length / 4 / 2000)) * 4; // ~2000 samples is plenty
-    let sum = 0, n = 0;
-    for (let i = 0; i < px.length; i += stride, n++) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-    dark = sum / n < 110;
+    // Shrink to 32x32 first: reading the full area cost ~30 ms per move on a 4K-wide mark.
+    const probe = probeOf();
+    probe.clearRect(0, 0, 32, 32);
+    probe.drawImage(c.canvas, x, y, w, h, 0, 0, 32, 32);
+    const px = probe.getImageData(0, 0, 32, 32).data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 4) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    dark = sum / (px.length / 4) < 110;
   }
   darkCache.set(r, { key, dark });
   return dark;
